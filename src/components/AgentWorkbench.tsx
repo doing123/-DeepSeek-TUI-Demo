@@ -1,7 +1,13 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import type { AgentRunResult, PatchApplyResult, PatchProposal } from "@/lib/agent/types";
+import type {
+  AgentRunResult,
+  PatchApplyResult,
+  PatchProposal,
+  ValidationCommandName,
+  ValidationRunResult
+} from "@/lib/agent/types";
 
 const starterGoals = [
   "阅读当前仓库，告诉我下一步最小可实现的 coding-agent 功能。",
@@ -12,6 +18,8 @@ const starterGoals = [
 const defaultGoal =
   "我想学习如何做一个简易 agent 编码工具。请先扫描仓库，给出当前架构理解、下一步实现建议和风险点。";
 
+// Main learning workbench: collects goals, runs the server-side agent, and
+// displays the trace/result shape that a future TUI can reuse.
 export function AgentWorkbench() {
   const [goal, setGoal] = useState(defaultGoal);
   const [result, setResult] = useState<AgentRunResult | null>(null);
@@ -98,6 +106,8 @@ export function AgentWorkbench() {
         <div className="status">
           DeepSeek key 通过 <code>DEEPSEEK_API_KEY</code> 读取；没有 key 时会返回本地离线结果。
         </div>
+
+        <ValidationPanel />
       </aside>
 
       <section className="workspace">
@@ -215,6 +225,8 @@ function AgentResultView({ result }: { result: AgentRunResult }) {
   );
 }
 
+// Human approval boundary for writes. The model can propose file changes, but
+// this component requires a user confirmation before calling the apply API.
 function PatchPreview({ proposal }: { proposal: PatchProposal }) {
   const [isApplying, setIsApplying] = useState(false);
   const [applyResult, setApplyResult] = useState<PatchApplyResult | null>(null);
@@ -302,10 +314,86 @@ function PatchPreview({ proposal }: { proposal: PatchProposal }) {
   );
 }
 
+// Manual validation commands mirror real coding-agent workflows: apply a patch,
+// then run a known verification command and inspect the output.
+function ValidationPanel() {
+  const [isRunning, setIsRunning] = useState<ValidationCommandName | null>(null);
+  const [result, setResult] = useState<ValidationRunResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function runValidation(command: ValidationCommandName) {
+    setIsRunning(command);
+    setError(null);
+    setResult(null);
+
+    try {
+      const response = await fetch("/api/validate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ command })
+      });
+
+      const payload = (await response.json()) as ValidationRunResult | { error?: string };
+
+      if ("command" in payload) {
+        setResult(payload);
+        return;
+      }
+
+      throw new Error(payload.error ?? "Validation failed");
+    } catch (runError) {
+      setError(runError instanceof Error ? runError.message : "Validation failed");
+    } finally {
+      setIsRunning(null);
+    }
+  }
+
+  return (
+    <section className="validation-panel" aria-label="验证命令">
+      <div className="section-title">验证</div>
+      <div className="actions">
+        <button
+          className="secondary"
+          type="button"
+          onClick={() => runValidation("typecheck")}
+          disabled={Boolean(isRunning)}
+        >
+          {isRunning === "typecheck" ? "检查中" : "Typecheck"}
+        </button>
+        <button
+          className="secondary"
+          type="button"
+          onClick={() => runValidation("build")}
+          disabled={Boolean(isRunning)}
+        >
+          {isRunning === "build" ? "构建中" : "Build"}
+        </button>
+      </div>
+
+      {result ? (
+        <div className={result.ok ? "validation-result validation-result--ok" : "validation-result"}>
+          <strong>{result.displayCommand}</strong>
+          <span>{result.ok ? "通过" : `失败 (${result.exitCode ?? "unknown"})`}</span>
+          <pre>{formatValidationOutput(result)}</pre>
+        </div>
+      ) : null}
+
+      {error ? <div className="validation-result">{error}</div> : null}
+    </section>
+  );
+}
+
 function formatJson(value: unknown) {
   return JSON.stringify(value, null, 2);
 }
 
 function previewContent(content: string) {
   return content.length > 6000 ? `${content.slice(0, 6000)}\n...` : content;
+}
+
+function formatValidationOutput(result: ValidationRunResult) {
+  const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
+  return output || `completed in ${result.durationMs}ms`;
 }

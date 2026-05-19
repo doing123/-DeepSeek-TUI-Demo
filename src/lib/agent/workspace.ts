@@ -30,6 +30,8 @@ const textExtensions = new Set([
   ".yaml"
 ]);
 
+// Builds a lightweight map of readable text files. This is the coarse context
+// the model sees before it starts asking for specific read-only tools.
 export async function getWorkspaceSnapshot(
   root: string,
   options: { maxFiles?: number; maxExcerptLength?: number } = {}
@@ -66,6 +68,7 @@ export async function listWorkspaceFiles(
   return files;
 }
 
+// Reads one workspace-relative file after path and text-file validation.
 export async function readWorkspaceFile(
   root: string,
   relativePath: string,
@@ -128,6 +131,8 @@ export async function searchWorkspaceText(
   return matches;
 }
 
+// Shared guard for future write tools. It validates paths but does not create
+// files or directories by itself.
 export async function resolveWorkspaceWriteFile(root: string, relativePath: string) {
   const safePath = resolveWorkspacePath(root, relativePath);
 
@@ -201,6 +206,7 @@ async function resolveWorkspaceReadFile(root: string, relativePath: string) {
   return safePath;
 }
 
+// Prevents path traversal and keeps secrets/heavy directories out of tool calls.
 function resolveWorkspacePath(root: string, relativePath: string) {
   const normalizedRoot = path.resolve(root);
 

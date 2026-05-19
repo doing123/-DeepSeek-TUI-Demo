@@ -57,6 +57,20 @@ export type PatchApplyResult = {
   errors: string[];
 };
 
+export type ValidationCommandName = "typecheck" | "build";
+
+export type ValidationRunResult = {
+  ok: boolean;
+  command: ValidationCommandName;
+  displayCommand: string;
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+};
+
 export type ToolDefinition = {
   name: ReadOnlyToolName;
   description: string;

@@ -120,8 +120,8 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     },
     {
       id: "safety",
-      label: "Patch Approval",
-      detail: "结构化提案 / 人工确认 / 安全写入",
+      label: "Validation Commands",
+      detail: "typecheck / build / 白名单执行",
       x: 1000,
       y: 535,
       w: 420,

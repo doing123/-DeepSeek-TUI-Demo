@@ -3,6 +3,9 @@ import path from "path";
 import type { PatchApplyResult, PatchFileChange, PatchProposal } from "./types";
 import { resolveWorkspaceWriteFile } from "./workspace";
 
+// Patch proposals use full-file create/replace operations instead of arbitrary
+// shell commands or free-form diffs. That keeps V0.3 easy to inspect and safe to
+// apply after human approval.
 const MAX_PATCH_FILES = 8;
 const MAX_FILE_CONTENT_LENGTH = 80_000;
 const MAX_TOTAL_CONTENT_LENGTH = 300_000;
@@ -34,6 +37,8 @@ export function normalizePatchProposal(value: unknown): PatchProposal | undefine
   };
 }
 
+// Applies a model-proposed patch only after the caller has explicitly approved
+// it. Every file is revalidated here so the browser cannot bypass path checks.
 export async function applyPatchProposal(
   workspaceRoot: string,
   proposal: unknown
@@ -80,6 +85,8 @@ export async function applyPatchProposal(
   };
 }
 
+// Performs all safety checks before writing any file, so partial writes only
+// happen after the complete proposal passes validation.
 async function preparePatchFiles(workspaceRoot: string, proposal: PatchProposal) {
   const errors: string[] = [];
   const files: PreparedPatchFile[] = [];

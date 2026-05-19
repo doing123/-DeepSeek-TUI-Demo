@@ -22,7 +22,7 @@ Open http://localhost:3000 and run a goal from the workbench.
 
 ## Architecture
 
-![Architecture v0.3.0](docs/architecture/architecture-v0.3.0.svg)
+![Architecture v0.4.0](docs/architecture/architecture-v0.4.0.svg)
 
 - **Next.js App**: 负责输入任务、展示 agent trace、展示结构化建议。
 - **API Route**: 运行在 Node.js 服务端，读取环境变量和本地仓库。
@@ -45,6 +45,8 @@ Architecture snapshots are stored in `docs/architecture/` for version-to-version
 - 工具 trace：UI 展示每次工具调用的输入和输出摘要。
 - 补丁预览：模型 final answer 可附带结构化 patchProposal，由 UI 展示待写入文件。
 - 人工审批：用户点击应用补丁后，服务端重新校验路径和 action，再写入 create/replace 文件。
+- 验证命令：UI 可触发 npm run typecheck 和 npm run build，服务端只执行白名单命令。
+- DeepSeek 实战参数：默认启用 response_format=json_object，显式控制 thinking，并配置 max_tokens。
 - 版本架构图：每次版本更新生成 docs/architecture/architecture-vX.Y.Z.svg 和 latest SVG 快照。
 - 自动文档生成：pre-commit 时运行 npm run docs:generate 并自动 git add README.md docs/architecture。
 - 独立开发上下文：docs/DEVELOPMENT_CONTEXT.md 记录参考项目、实现取舍和下一版 prompt。
@@ -74,6 +76,7 @@ Sources:
 - 工具循环采用 provider-agnostic 的 JSON 协议，方便后续接入原生 function calling 或 CLI/TUI。
 - 版本架构图使用无依赖 SVG 生成，作为每次版本更新时的视觉快照。
 - V0.3 把写文件拆成 patchProposal、UI 预览、用户确认、服务端安全应用四步，贴近真实 coding agent 的审批边界。
+- V0.4 加入白名单验证命令，并按 DeepSeek 官方 JSON Output 和 thinking 参数规则收紧请求。
 
 ## Development Context
 
@@ -107,10 +110,10 @@ Sources:
 
 ### V0.4 · 命令执行与验证
 
-- macOS shell 命令白名单
+- npm 脚本白名单
 - npm run typecheck/build
-- 测试结果回填给模型
-- 安全边界说明
+- UI 验证输出
+- DeepSeek JSON Output 配置
 
 ### V0.5 · 接近真实 coding agent
 
