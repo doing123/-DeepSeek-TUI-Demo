@@ -62,9 +62,9 @@ Observed ideas to learn from:
 
 ## Current State
 
-Version: V0.4
+Version: V0.5
 
-The current implementation is a learning workbench with read-only tools, human-approved patch application, and whitelist validation commands, not a full TUI yet.
+The current implementation is a learning workbench with read-only tools, human-approved patch application, whitelist validation commands, and local run history, not a full TUI yet.
 
 Implemented:
 
@@ -83,6 +83,9 @@ Implemented:
 - Safe `create` and `replace` full-file patch actions.
 - Whitelist validation API for `npm run typecheck` and `npm run build`.
 - DeepSeek request options aligned with JSON Output and thinking-mode parameter rules.
+- Local `.agent-runs` store for lightweight run records.
+- Recent-runs UI for inspecting previous agent results.
+- Validation results can be linked to a saved run by `runId`.
 - Generated architecture snapshots in `docs/architecture/`.
 - Offline fallback when `DEEPSEEK_API_KEY` is missing.
 - README generation from `docs/project-plan.json` and `package.json`.
@@ -96,8 +99,10 @@ Important files:
 - `src/lib/agent/tools.ts`
 - `src/lib/agent/patches.ts`
 - `src/lib/agent/validation.ts`
+- `src/lib/agent/run-store.ts`
 - `src/app/api/patch/apply/route.ts`
 - `src/app/api/validate/route.ts`
+- `src/app/api/runs/route.ts`
 - `src/lib/agent/deepseek.ts`
 - `src/lib/agent/workspace.ts`
 - `docs/project-plan.json`
@@ -123,7 +128,7 @@ UI / future CLI
   -> Generated docs + architecture snapshot
 ```
 
-The V0.4 architecture keeps the V0.2 tool loop, V0.3 write approval, and adds command validation:
+The V0.5 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 validation, and adds run history:
 
 1. User submits a goal.
 2. Agent creates a turn state.
@@ -135,6 +140,8 @@ The V0.4 architecture keeps the V0.2 tool loop, V0.3 write approval, and adds co
 8. UI shows patch preview and requires explicit user confirmation.
 9. Server validates paths/actions before writing files.
 10. User can run fixed validation commands and inspect output.
+11. Server saves lightweight run records under `.agent-runs`.
+12. UI lists recent runs and can load a saved result.
 
 ## V0.2 Completed
 
@@ -194,6 +201,24 @@ Do not build yet:
 - model-suggested commands
 - automatic validation after patch apply
 
+## V0.5 Completed
+
+Theme: local session history.
+
+Built:
+
+- `.agent-runs` local run store ignored by git.
+- Automatic save after each agent run.
+- `GET /api/runs` for summaries and detail records.
+- Recent-runs UI panel.
+- Validation result association by `runId`.
+
+Do not build yet:
+
+- full transcript replay
+- multi-turn conversation resume
+- remote/shared run storage
+
 ## Safety Rules
 
 - macOS only for now.
@@ -210,7 +235,7 @@ Use this prompt when starting the next version:
 ```txt
 You are continuing DeepSeek TUI Demo.
 
-Goal: implement V0.5, a session history and run record layer for a macOS-first coding-agent learning project built with Next.js and TypeScript.
+Goal: implement V0.6, a terminal/TUI shell for a macOS-first coding-agent learning project built with Next.js and TypeScript.
 
 Read first:
 - docs/DEVELOPMENT_CONTEXT.md
@@ -220,17 +245,18 @@ Read first:
 - src/lib/agent/tools.ts
 - src/lib/agent/patches.ts
 - src/lib/agent/validation.ts
+- src/lib/agent/run-store.ts
 - src/lib/agent/workspace.ts
 
 Constraints:
 - Keep DeepSeek as the first provider.
-- Keep the browser UI, but structure the core so a CLI/TUI can be added later.
+- Keep the browser UI working while adding a small CLI entrypoint.
 - Keep the existing read-only tools.
 - Keep human approval before writes.
 - Never execute model-suggested arbitrary commands.
-- Persist lightweight run records locally under an ignored data directory.
-- Store goal, model, steps, tool calls, patch proposal metadata, validation results, and timestamps.
-- Add a UI list for recent runs and allow inspecting previous results.
+- Reuse the existing runner, run store, patch, and validation modules.
+- Add a macOS-first terminal command that can run one goal and print a compact trace.
+- Add a simple TUI-like output layout before introducing a full terminal UI framework.
 - Do not store API keys or full hidden reasoning.
 - Update README through npm run readme:generate.
 - Run npm run docs:generate so the versioned architecture SVG is updated.

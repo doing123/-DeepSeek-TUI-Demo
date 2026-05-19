@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runCodingAgent } from "@/lib/agent/runner";
+import { saveAgentRunRecord } from "@/lib/agent/run-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,6 +29,8 @@ export async function POST(request: Request) {
       goal,
       workspaceRoot: process.cwd()
     });
+
+    await saveAgentRunRecord(process.cwd(), result);
 
     return NextResponse.json(result);
   } catch (error) {

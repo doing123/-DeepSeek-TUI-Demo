@@ -71,6 +71,16 @@ export type ValidationRunResult = {
   durationMs: number;
 };
 
+export type PatchProposalMeta = {
+  summary: string;
+  fileCount: number;
+  files: Array<{
+    path: string;
+    action: PatchAction;
+    explanation?: string;
+  }>;
+};
+
 export type ToolDefinition = {
   name: ReadOnlyToolName;
   description: string;
@@ -115,6 +125,33 @@ export type AgentRunResult = {
   toolCallCount: number;
   answer: AgentAnswer;
   rawText?: string;
+};
+
+export type StoredAgentAnswer = Omit<AgentAnswer, "patchProposal">;
+
+export type StoredAgentRunResult = Omit<AgentRunResult, "answer" | "rawText"> & {
+  answer: StoredAgentAnswer;
+};
+
+export type AgentRunRecord = {
+  id: string;
+  savedAt: string;
+  result: StoredAgentRunResult;
+  patchProposalMeta?: PatchProposalMeta;
+  validations: ValidationRunResult[];
+};
+
+export type AgentRunSummary = {
+  id: string;
+  goal: string;
+  title: string;
+  mode: AgentMode;
+  model: string;
+  startedAt: string;
+  completedAt: string;
+  toolCallCount: number;
+  patchFileCount: number;
+  validationCount: number;
 };
 
 export type ProviderCompletion = {

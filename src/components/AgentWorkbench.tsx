@@ -1,8 +1,10 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import type {
+  AgentRunRecord,
   AgentRunResult,
+  AgentRunSummary,
   PatchApplyResult,
   PatchProposal,
   ValidationCommandName,
@@ -23,10 +25,47 @@ const defaultGoal =
 export function AgentWorkbench() {
   const [goal, setGoal] = useState(defaultGoal);
   const [result, setResult] = useState<AgentRunResult | null>(null);
+  const [selectedRecord, setSelectedRecord] = useState<AgentRunRecord | null>(null);
+  const [recentRuns, setRecentRuns] = useState<AgentRunSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
 
   const canRun = useMemo(() => goal.trim().length > 0 && !isRunning, [goal, isRunning]);
+
+  useEffect(() => {
+    void loadRecentRuns();
+  }, []);
+
+  async function loadRecentRuns() {
+    const response = await fetch("/api/runs", {
+      cache: "no-store"
+    });
+    const payload = (await response.json()) as { runs?: AgentRunSummary[] };
+    setRecentRuns(payload.runs ?? []);
+  }
+
+  async function loadRunRecord(runId: string) {
+    const response = await fetch(`/api/runs?id=${encodeURIComponent(runId)}`, {
+      cache: "no-store"
+    });
+    const record = (await response.json()) as AgentRunRecord | { error?: string };
+
+    if (!("result" in record)) {
+      throw new Error(record.error ?? "Run record not found");
+    }
+
+    setSelectedRecord(record);
+    setResult(record.result);
+    setError(null);
+  }
+
+  async function handleValidationComplete(runId?: string) {
+    await loadRecentRuns();
+
+    if (runId && selectedRecord?.id === runId) {
+      await loadRunRecord(runId);
+    }
+  }
 
   async function runAgent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -37,6 +76,7 @@ export function AgentWorkbench() {
     setIsRunning(true);
     setError(null);
     setResult(null);
+    setSelectedRecord(null);
 
     try {
       const response = await fetch("/api/agent", {
@@ -54,6 +94,7 @@ export function AgentWorkbench() {
       }
 
       setResult(payload as AgentRunResult);
+      await loadRecentRuns();
     } catch (runError) {
       setError(runError instanceof Error ? runError.message : "Agent run failed");
     } finally {
@@ -103,18 +144,20 @@ export function AgentWorkbench() {
           ))}
         </section>
 
+        <RecentRunsPanel runs={recentRuns} onSelectRun={loadRunRecord} />
+
         <div className="status">
           DeepSeek key 通过 <code>DEEPSEEK_API_KEY</code> 读取；没有 key 时会返回本地离线结果。
         </div>
 
-        <ValidationPanel />
+        <ValidationPanel runId={result?.id} onValidationComplete={handleValidationComplete} />
       </aside>
 
       <section className="workspace">
         {error ? (
           <div className="panel error">{error}</div>
         ) : result ? (
-          <AgentResultView result={result} />
+          <AgentResultView result={result} record={selectedRecord} />
         ) : (
           <div className="empty">
             <p>输入任务后运行，右侧会显示 agent 的扫描步骤、建议和后续动作。</p>
@@ -125,7 +168,47 @@ export function AgentWorkbench() {
   );
 }
 
-function AgentResultView({ result }: { result: AgentRunResult }) {
+function RecentRunsPanel({
+  runs,
+  onSelectRun
+}: {
+  runs: AgentRunSummary[];
+  onSelectRun: (runId: string) => Promise<void>;
+}) {
+  return (
+    <section className="recent-runs" aria-label="最近运行">
+      <div className="section-title">最近运行</div>
+      {runs.length === 0 ? (
+        <p className="recent-runs__empty">还没有保存的运行记录。</p>
+      ) : (
+        <div className="recent-runs__list">
+          {runs.map((run) => (
+            <button
+              className="recent-run"
+              type="button"
+              key={run.id}
+              onClick={() => void onSelectRun(run.id)}
+            >
+              <strong>{run.title}</strong>
+              <span>{run.goal}</span>
+              <small>
+                {run.mode} · {run.toolCallCount} tools · {run.validationCount} checks
+              </small>
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AgentResultView({
+  result,
+  record
+}: {
+  result: AgentRunResult;
+  record: AgentRunRecord | null;
+}) {
   return (
     <div className="output-grid">
       <div>
@@ -191,6 +274,36 @@ function AgentResultView({ result }: { result: AgentRunResult }) {
             ))}
           </ul>
         </section>
+
+        {record?.patchProposalMeta ? (
+          <section className="panel">
+            <h3>补丁元信息</h3>
+            <p className="summary">{record.patchProposalMeta.summary}</p>
+            <div className="tag-row">
+              {record.patchProposalMeta.files.map((file) => (
+                <span className="tag tag--neutral" key={`${file.action}-${file.path}`}>
+                  {file.action}: {file.path}
+                </span>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {record?.validations.length ? (
+          <section className="panel">
+            <h3>验证历史</h3>
+            <ul className="list">
+              {record.validations.map((validation) => (
+                <li key={`${validation.command}-${validation.startedAt}`}>
+                  <span className="step-title">{validation.displayCommand}</span>
+                  <span className="step-meta">
+                    {validation.ok ? "通过" : "失败"} · {validation.durationMs}ms
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         <section className="panel">
           <h3>相关文件</h3>
@@ -316,7 +429,13 @@ function PatchPreview({ proposal }: { proposal: PatchProposal }) {
 
 // Manual validation commands mirror real coding-agent workflows: apply a patch,
 // then run a known verification command and inspect the output.
-function ValidationPanel() {
+function ValidationPanel({
+  runId,
+  onValidationComplete
+}: {
+  runId?: string;
+  onValidationComplete: (runId?: string) => Promise<void>;
+}) {
   const [isRunning, setIsRunning] = useState<ValidationCommandName | null>(null);
   const [result, setResult] = useState<ValidationRunResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -332,13 +451,14 @@ function ValidationPanel() {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ command })
+        body: JSON.stringify({ command, runId })
       });
 
       const payload = (await response.json()) as ValidationRunResult | { error?: string };
 
       if ("command" in payload) {
         setResult(payload);
+        await onValidationComplete(runId);
         return;
       }
 

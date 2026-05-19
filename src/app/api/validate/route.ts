@@ -3,6 +3,7 @@ import {
   isValidationCommandName,
   runValidationCommand
 } from "@/lib/agent/validation";
+import { appendValidationToRun } from "@/lib/agent/run-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +18,7 @@ export async function POST(request: Request) {
   }
 
   const command = readCommand(payload);
+  const runId = readRunId(payload);
 
   if (!isValidationCommandName(command)) {
     return NextResponse.json(
@@ -28,6 +30,11 @@ export async function POST(request: Request) {
   }
 
   const result = await runValidationCommand(process.cwd(), command);
+
+  if (runId) {
+    await appendValidationToRun(process.cwd(), runId, result);
+  }
+
   return NextResponse.json(result, { status: result.ok ? 200 : 422 });
 }
 
@@ -37,4 +44,13 @@ function readCommand(payload: unknown) {
   }
 
   return (payload as { command?: unknown }).command;
+}
+
+function readRunId(payload: unknown) {
+  if (!payload || typeof payload !== "object" || !("runId" in payload)) {
+    return null;
+  }
+
+  const value = (payload as { runId?: unknown }).runId;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }

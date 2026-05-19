@@ -2,6 +2,27 @@
 
 All notable project changes are tracked here.
 
+## 0.5.0 - 2026-05-19
+
+### Added
+
+- Added local `.agent-runs` storage for lightweight agent run records.
+- Added `GET /api/runs` to list recent runs and load a saved run record.
+- Added automatic run saving after `POST /api/agent`.
+- Added validation result association through `runId`.
+- Added a recent-runs panel in the workbench UI.
+- Added versioned architecture snapshot generation for `v0.5.0`.
+
+### Changed
+
+- Stored run records omit model raw text and full patch content; patch proposals are saved as metadata only.
+- Bumped project version to `0.5.0`.
+
+### Notes
+
+- Run history is local-only and ignored by git.
+- This is a session-history foundation, not full conversation resume yet.
+
 ## 0.4.0 - 2026-05-19
 
 ### Added

@@ -100,8 +100,8 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     },
     {
       id: "docs",
-      label: "Docs Automation",
-      detail: "README / CHANGELOG / Context / Architecture SVG",
+      label: "Run History + Docs",
+      detail: ".agent-runs / README / CHANGELOG / SVG",
       x: 70,
       y: 535,
       w: 360,
@@ -234,6 +234,8 @@ function pickFeatureHighlights(features) {
       "工具 trace",
       "补丁预览",
       "人工审批",
+      "运行记录",
+      "验证关联",
       "版本架构图",
       "自动文档生成"
     ].some((keyword) => feature.includes(keyword))

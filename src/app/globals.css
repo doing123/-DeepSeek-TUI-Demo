@@ -168,6 +168,52 @@ button {
   min-height: 38px;
 }
 
+.recent-runs {
+  display: grid;
+  gap: 10px;
+}
+
+.recent-runs__empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.recent-runs__list {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.recent-run {
+  display: grid;
+  gap: 4px;
+  min-height: 58px;
+  padding: 10px 11px;
+  text-align: left;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.recent-run strong,
+.recent-run span,
+.recent-run small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-run span,
+.recent-run small {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .status {
   padding: 12px;
   border: 1px solid var(--line);

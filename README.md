@@ -22,7 +22,7 @@ Open http://localhost:3000 and run a goal from the workbench.
 
 ## Architecture
 
-![Architecture v0.4.0](docs/architecture/architecture-v0.4.0.svg)
+![Architecture v0.5.0](docs/architecture/architecture-v0.5.0.svg)
 
 - **Next.js App**: 负责输入任务、展示 agent trace、展示结构化建议。
 - **API Route**: 运行在 Node.js 服务端，读取环境变量和本地仓库。
@@ -47,6 +47,8 @@ Architecture snapshots are stored in `docs/architecture/` for version-to-version
 - 人工审批：用户点击应用补丁后，服务端重新校验路径和 action，再写入 create/replace 文件。
 - 验证命令：UI 可触发 npm run typecheck 和 npm run build，服务端只执行白名单命令。
 - DeepSeek 实战参数：默认启用 response_format=json_object，显式控制 thinking，并配置 max_tokens。
+- 运行记录：每次 agent run 会保存到本地 .agent-runs，并可在 UI 中回看最近运行。
+- 验证关联：验证命令可关联当前 runId，结果会追加到本地运行记录。
 - 版本架构图：每次版本更新生成 docs/architecture/architecture-vX.Y.Z.svg 和 latest SVG 快照。
 - 自动文档生成：pre-commit 时运行 npm run docs:generate 并自动 git add README.md docs/architecture。
 - 独立开发上下文：docs/DEVELOPMENT_CONTEXT.md 记录参考项目、实现取舍和下一版 prompt。
@@ -77,6 +79,7 @@ Sources:
 - 版本架构图使用无依赖 SVG 生成，作为每次版本更新时的视觉快照。
 - V0.3 把写文件拆成 patchProposal、UI 预览、用户确认、服务端安全应用四步，贴近真实 coding agent 的审批边界。
 - V0.4 加入白名单验证命令，并按 DeepSeek 官方 JSON Output 和 thinking 参数规则收紧请求。
+- V0.5 引入本地 run history，让每次 agent 运行、补丁元信息和验证结果形成可回看的任务轨迹。
 
 ## Development Context
 
@@ -115,13 +118,19 @@ Sources:
 - UI 验证输出
 - DeepSeek JSON Output 配置
 
-### V0.5 · 接近真实 coding agent
+### V0.5 · 运行历史
 
-- 会话历史
-- 项目索引
-- 多 provider
-- 文件级权限
-- 任务检查点
+- 本地 run store
+- 最近运行列表
+- 运行结果回看
+- 验证结果关联
+
+### V0.6 · 终端/TUI 外壳
+
+- CLI 命令入口
+- TUI 状态视图
+- 会话恢复
+- Git 只读工具
 
 ## Scripts
 
