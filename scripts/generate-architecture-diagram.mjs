@@ -11,7 +11,7 @@ const svg = buildSvg({
   title: plan.title,
   version,
   environment: plan.environment,
-  features: plan.currentFeatures.slice(0, 7),
+  features: pickFeatureHighlights(plan.currentFeatures),
   roadmap: plan.roadmap
 });
 
@@ -111,7 +111,7 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     {
       id: "next",
       label: "Next Version",
-      detail: nextRoadmapText(roadmap),
+      detail: nextRoadmapText(roadmap, version),
       x: 520,
       y: 535,
       w: 390,
@@ -120,8 +120,8 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     },
     {
       id: "safety",
-      label: "Safety Boundary",
-      detail: "当前不写文件 / 不执行任意 shell / 后续人工审批",
+      label: "Patch Approval",
+      detail: "结构化提案 / 人工确认 / 安全写入",
       x: 1000,
       y: 535,
       w: 420,
@@ -142,7 +142,15 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     ["next", "runner"]
   ];
 
-  const featureLines = features.map((feature) => `<tspan x="80" dy="24">${escapeXml(feature)}</tspan>`).join("");
+  const featureLines = features
+    .map((feature, index) => {
+      const column = index < 4 ? 0 : 1;
+      const row = index % 4;
+      const x = column === 0 ? 80 : 760;
+      const y = 724 + row * 24;
+      return `<tspan x="${x}" y="${y}">${escapeXml(feature)}</tspan>`;
+    })
+    .join("");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1500" height="900" viewBox="0 0 1500 900" role="img" aria-label="${escapeXml(title)} architecture diagram">
@@ -210,9 +218,28 @@ function node(nodes, id) {
   return found;
 }
 
-function nextRoadmapText(roadmap) {
-  const next = roadmap.find((item) => item.version === "V0.3") ?? roadmap[0];
+function nextRoadmapText(roadmap, version) {
+  const currentMinor = version.split(".").slice(0, 2).join(".");
+  const currentLabel = `V${currentMinor}`;
+  const currentIndex = roadmap.findIndex((item) => item.version === currentLabel);
+  const next = roadmap[currentIndex + 1] ?? roadmap[0];
   return `${next.version} ${next.theme}`;
+}
+
+function pickFeatureHighlights(features) {
+  const important = features.filter((feature) =>
+    [
+      "服务端 API",
+      "只读工具循环",
+      "工具 trace",
+      "补丁预览",
+      "人工审批",
+      "版本架构图",
+      "自动文档生成"
+    ].some((keyword) => feature.includes(keyword))
+  );
+
+  return important.slice(0, 8);
 }
 
 function escapeXml(value) {

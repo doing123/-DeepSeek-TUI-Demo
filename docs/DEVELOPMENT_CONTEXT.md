@@ -62,9 +62,9 @@ Observed ideas to learn from:
 
 ## Current State
 
-Version: V0.2
+Version: V0.3
 
-The current implementation is a learning workbench with a read-only agent tool loop, not a full TUI yet.
+The current implementation is a learning workbench with read-only tools and human-approved patch application, not a full TUI yet.
 
 Implemented:
 
@@ -77,6 +77,10 @@ Implemented:
 - Read-only `list_files`, `read_file`, and `search_text` tools.
 - Tool-call limit to avoid runaway loops.
 - UI trace entries for tool input and output summaries.
+- Structured `patchProposal` final answer format.
+- UI patch preview with explicit confirmation before writes.
+- Server-side patch apply API with workspace path validation.
+- Safe `create` and `replace` full-file patch actions.
 - Generated architecture snapshots in `docs/architecture/`.
 - Offline fallback when `DEEPSEEK_API_KEY` is missing.
 - README generation from `docs/project-plan.json` and `package.json`.
@@ -88,6 +92,8 @@ Important files:
 - `src/app/api/agent/route.ts`
 - `src/lib/agent/runner.ts`
 - `src/lib/agent/tools.ts`
+- `src/lib/agent/patches.ts`
+- `src/app/api/patch/apply/route.ts`
 - `src/lib/agent/deepseek.ts`
 - `src/lib/agent/workspace.ts`
 - `docs/project-plan.json`
@@ -113,7 +119,7 @@ UI / future CLI
   -> Generated docs + architecture snapshot
 ```
 
-The V0.2 architecture stops giving the model a large one-shot snapshot and instead lets it ask for tools:
+The V0.3 architecture keeps the V0.2 tool loop and adds a human approval boundary for writes:
 
 1. User submits a goal.
 2. Agent creates a turn state.
@@ -121,7 +127,9 @@ The V0.2 architecture stops giving the model a large one-shot snapshot and inste
 4. Server validates the tool call against a local policy.
 5. Tool output is appended to the transcript.
 6. Model either requests another tool or returns a final answer.
-7. UI shows trace, result, and any approval request.
+7. Final answers may include a `patchProposal` with structured file changes.
+8. UI shows patch preview and requires explicit user confirmation.
+9. Server validates paths/actions before writing files.
 
 ## V0.2 Completed
 
@@ -148,13 +156,13 @@ Do not build yet:
 
 Theme: patch preview with human approval.
 
-Build:
+Built:
 
-- model returns unified diff or structured file edits
-- server validates path safety and diff format
+- model returns structured file edits through `patchProposal`
+- server validates path safety and patch action
 - UI shows file list and patch preview
 - user explicitly approves before applying
-- post-apply typecheck/build can be triggered manually
+- server applies safe full-file `create` and `replace` actions
 
 Do not build yet:
 
@@ -179,7 +187,7 @@ Use this prompt when starting the next version:
 ```txt
 You are continuing DeepSeek TUI Demo.
 
-Goal: implement V0.3, a patch preview and human approval flow for a macOS-first coding-agent learning project built with Next.js and TypeScript.
+Goal: implement V0.4, a command validation loop for a macOS-first coding-agent learning project built with Next.js and TypeScript.
 
 Read first:
 - docs/DEVELOPMENT_CONTEXT.md
@@ -187,17 +195,18 @@ Read first:
 - src/lib/agent/runner.ts
 - src/lib/agent/prompts.ts
 - src/lib/agent/tools.ts
+- src/lib/agent/patches.ts
 - src/lib/agent/workspace.ts
 
 Constraints:
 - Keep DeepSeek as the first provider.
 - Keep the browser UI, but structure the core so a CLI/TUI can be added later.
 - Keep the existing read-only tools.
-- Add a patch proposal format, but do not apply changes automatically.
-- Validate patch paths against the workspace root.
-- Show patch preview in the UI.
-- Require explicit user approval before applying a patch.
-- Do not implement arbitrary shell execution yet.
+- Keep human approval before writes.
+- Add a narrow command whitelist for validation only, such as npm run typecheck and npm run build.
+- Never execute model-suggested arbitrary commands.
+- Show command output in the trace.
+- Let the user trigger validation after applying a patch.
 - Update README through npm run readme:generate.
 - Run npm run docs:generate so the versioned architecture SVG is updated.
 ```

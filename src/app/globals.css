@@ -328,6 +328,60 @@ button {
   white-space: pre-wrap;
 }
 
+.patch-heading {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.patch-heading h3 {
+  margin-bottom: 6px;
+}
+
+.patch-files {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.patch-file {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfb;
+  padding: 12px;
+}
+
+.patch-file__head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+}
+
+.apply-result {
+  margin-top: 12px;
+  border: 1px solid #f4b6b6;
+  border-radius: 8px;
+  background: #fde8e8;
+  color: #8b1d1d;
+  padding: 12px;
+  line-height: 1.5;
+}
+
+.apply-result p {
+  margin: 6px 0 0;
+}
+
+.apply-result--ok {
+  border-color: #b7ddc6;
+  background: #e4f2ea;
+  color: var(--ok);
+}
+
 .trace-code {
   margin: 4px 0 0;
   max-height: 180px;
@@ -368,5 +422,10 @@ button {
   .primary,
   .secondary {
     width: 100%;
+  }
+
+  .patch-heading {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

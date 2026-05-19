@@ -37,6 +37,26 @@ export type WorkspaceSearchMatch = {
   line: string;
 };
 
+export type PatchAction = "create" | "replace";
+
+export type PatchFileChange = {
+  path: string;
+  action: PatchAction;
+  content: string;
+  explanation?: string;
+};
+
+export type PatchProposal = {
+  summary: string;
+  files: PatchFileChange[];
+};
+
+export type PatchApplyResult = {
+  ok: boolean;
+  appliedFiles: string[];
+  errors: string[];
+};
+
 export type ToolDefinition = {
   name: ReadOnlyToolName;
   description: string;
@@ -66,6 +86,7 @@ export type AgentAnswer = {
   proposedChanges: string[];
   risks: string[];
   nextActions: string[];
+  patchProposal?: PatchProposal;
 };
 
 export type AgentRunResult = {

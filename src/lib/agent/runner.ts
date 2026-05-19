@@ -4,6 +4,7 @@ import {
   getDeepSeekConfig,
   hasDeepSeekKey
 } from "./deepseek";
+import { normalizePatchProposal } from "./patches";
 import { buildCodingAgentMessages, buildToolResultMessage } from "./prompts";
 import {
   createToolCall,
@@ -240,14 +241,15 @@ function completeLatestStep(steps: AgentStep[], detail?: string, extra: Partial<
 
 function buildOfflineAnswer(fileCount: number): AgentAnswer {
   return {
-    title: "只读工具循环已就绪",
+    title: "补丁预览通道已就绪",
     summary:
-      "当前运行在离线模式。V0.2 已经具备 list_files、read_file、search_text 的只读工具协议；配置 DEEPSEEK_API_KEY 后模型会通过工具循环逐步理解仓库。",
+      "当前运行在离线模式。V0.3 已经具备只读工具循环、结构化补丁提案和人工确认后的安全应用入口；配置 DEEPSEEK_API_KEY 后模型可以基于仓库上下文提出可预览补丁。",
     plan: [
       "把 Web UI 作为任务入口，收集用户的编码目标。",
       `服务端先索引当前工作区的 ${fileCount} 个文本文件。`,
       "模型通过严格 JSON 请求只读工具，服务端执行后把结果回填。",
-      "模型在信息足够时输出结构化 final answer。"
+      "模型在信息足够时输出结构化 final answer，可附带 patchProposal。",
+      "用户在 UI 中审查 patchProposal 后，点击确认才会写入文件。"
     ],
     filesToInspect: [
       "src/app/api/agent/route.ts",
@@ -257,7 +259,6 @@ function buildOfflineAnswer(fileCount: number): AgentAnswer {
       "src/lib/agent/workspace.ts"
     ],
     proposedChanges: [
-      "V0.3 可以加入补丁预览和人工确认，避免 agent 直接写坏仓库。",
       "V0.4 可以加入终端命令白名单，用于运行 typecheck/test/build。"
     ],
     risks: [
@@ -268,7 +269,7 @@ function buildOfflineAnswer(fileCount: number): AgentAnswer {
     nextActions: [
       "复制 .env.example 为 .env.local 并填写 DEEPSEEK_API_KEY。",
       "运行 npm run dev 后在浏览器中测试任务输入。",
-      "实现 V0.3 的 patch preview 和人工审批。"
+      "实现 V0.4 的命令白名单和验证回填。"
     ]
   };
 }
@@ -374,6 +375,8 @@ function buildToolLimitAnswer(limit: number): AgentAnswer {
 }
 
 function normalizeAnswer(answer: Partial<AgentAnswer>): AgentAnswer {
+  const patchProposal = normalizePatchProposal(answer.patchProposal);
+
   return {
     title: readString(answer.title, "Agent 建议"),
     summary: readString(answer.summary, "模型没有返回摘要。"),
@@ -381,7 +384,8 @@ function normalizeAnswer(answer: Partial<AgentAnswer>): AgentAnswer {
     filesToInspect: readStringArray(answer.filesToInspect, []),
     proposedChanges: readStringArray(answer.proposedChanges, ["补充建议改动。"]),
     risks: readStringArray(answer.risks, ["补充风险点。"]),
-    nextActions: readStringArray(answer.nextActions, ["补充下一步。"])
+    nextActions: readStringArray(answer.nextActions, ["补充下一步。"]),
+    ...(patchProposal ? { patchProposal } : {})
   };
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import type { AgentRunResult } from "@/lib/agent/types";
+import type { AgentRunResult, PatchApplyResult, PatchProposal } from "@/lib/agent/types";
 
 const starterGoals = [
   "阅读当前仓库，告诉我下一步最小可实现的 coding-agent 功能。",
@@ -150,6 +150,10 @@ function AgentResultView({ result }: { result: AgentRunResult }) {
           </ul>
         </section>
 
+        {result.answer.patchProposal ? (
+          <PatchPreview proposal={result.answer.patchProposal} />
+        ) : null}
+
         {result.rawText ? (
           <section className="panel">
             <h3>模型原始输出</h3>
@@ -211,6 +215,97 @@ function AgentResultView({ result }: { result: AgentRunResult }) {
   );
 }
 
+function PatchPreview({ proposal }: { proposal: PatchProposal }) {
+  const [isApplying, setIsApplying] = useState(false);
+  const [applyResult, setApplyResult] = useState<PatchApplyResult | null>(null);
+  const [applyError, setApplyError] = useState<string | null>(null);
+
+  async function applyPatch() {
+    const confirmed = window.confirm(
+      `确认应用这个补丁吗？将写入 ${proposal.files.length} 个文件。`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsApplying(true);
+    setApplyError(null);
+    setApplyResult(null);
+
+    try {
+      const response = await fetch("/api/patch/apply", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ patchProposal: proposal })
+      });
+
+      const payload = (await response.json()) as PatchApplyResult | { error?: string };
+
+      if ("ok" in payload) {
+        setApplyResult(payload);
+        return;
+      }
+
+      throw new Error(payload.error ?? "Patch apply failed");
+    } catch (error) {
+      setApplyError(error instanceof Error ? error.message : "Patch apply failed");
+    } finally {
+      setIsApplying(false);
+    }
+  }
+
+  return (
+    <section className="panel">
+      <div className="patch-heading">
+        <div>
+          <h3>补丁预览</h3>
+          <p className="summary">{proposal.summary}</p>
+        </div>
+        <button
+          className="primary"
+          type="button"
+          onClick={applyPatch}
+          disabled={isApplying || applyResult?.ok}
+        >
+          {isApplying ? "应用中" : applyResult?.ok ? "已应用" : "应用补丁"}
+        </button>
+      </div>
+
+      <div className="patch-files">
+        {proposal.files.map((file) => (
+          <article className="patch-file" key={`${file.action}-${file.path}`}>
+            <div className="patch-file__head">
+              <span className="tag tag--neutral">{file.action}</span>
+              <strong>{file.path}</strong>
+            </div>
+            {file.explanation ? <p className="step-meta">{file.explanation}</p> : null}
+            <pre className="code-block">{previewContent(file.content)}</pre>
+          </article>
+        ))}
+      </div>
+
+      {applyResult ? (
+        <div className={applyResult.ok ? "apply-result apply-result--ok" : "apply-result"}>
+          <strong>{applyResult.ok ? "补丁已应用" : "补丁未应用"}</strong>
+          {applyResult.appliedFiles.length > 0 ? (
+            <p>{applyResult.appliedFiles.join(", ")}</p>
+          ) : null}
+          {applyResult.errors.length > 0 ? <p>{applyResult.errors.join("; ")}</p> : null}
+        </div>
+      ) : null}
+
+      {applyError ? <div className="apply-result">{applyError}</div> : null}
+    </section>
+  );
+}
+
 function formatJson(value: unknown) {
   return JSON.stringify(value, null, 2);
+}
+
+function previewContent(content: string) {
+  return content.length > 6000 ? `${content.slice(0, 6000)}\n...` : content;
 }

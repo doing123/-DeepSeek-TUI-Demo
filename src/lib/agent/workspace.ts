@@ -71,7 +71,7 @@ export async function readWorkspaceFile(
   relativePath: string,
   options: { maxLength?: number } = {}
 ) {
-  const safePath = await resolveWorkspaceFile(root, relativePath);
+  const safePath = await resolveWorkspaceReadFile(root, relativePath);
   const maxLength = options.maxLength ?? 12_000;
   const content = await readFile(safePath.absolutePath, "utf8");
 
@@ -106,7 +106,7 @@ export async function searchWorkspaceText(
       continue;
     }
 
-    const safePath = await resolveWorkspaceFile(root, file.path);
+    const safePath = await resolveWorkspaceReadFile(root, file.path);
     const content = await readFile(safePath.absolutePath, "utf8");
     const lines = content.split(/\r?\n/);
 
@@ -126,6 +126,16 @@ export async function searchWorkspaceText(
   }
 
   return matches;
+}
+
+export async function resolveWorkspaceWriteFile(root: string, relativePath: string) {
+  const safePath = resolveWorkspacePath(root, relativePath);
+
+  if (!isTextCandidate(safePath.relativePath)) {
+    throw new Error("Only text-like workspace files can be written.");
+  }
+
+  return safePath;
 }
 
 async function walk(
@@ -175,7 +185,23 @@ async function walk(
   }
 }
 
-async function resolveWorkspaceFile(root: string, relativePath: string) {
+async function resolveWorkspaceReadFile(root: string, relativePath: string) {
+  const safePath = resolveWorkspacePath(root, relativePath);
+
+  if (!isTextCandidate(safePath.relativePath)) {
+    throw new Error("Only text-like workspace files can be read.");
+  }
+
+  const fileStat = await stat(safePath.absolutePath);
+
+  if (!fileStat.isFile()) {
+    throw new Error("Path does not point to a file.");
+  }
+
+  return safePath;
+}
+
+function resolveWorkspacePath(root: string, relativePath: string) {
   const normalizedRoot = path.resolve(root);
 
   if (!relativePath.trim()) {
@@ -195,16 +221,6 @@ async function resolveWorkspaceFile(root: string, relativePath: string) {
     normalizedRelativePath.split(path.sep).some((part) => shouldIgnoreEntry(part))
   ) {
     throw new Error("Path is outside the allowed workspace.");
-  }
-
-  if (!isTextCandidate(normalizedRelativePath)) {
-    throw new Error("Only text-like workspace files can be read.");
-  }
-
-  const fileStat = await stat(absolutePath);
-
-  if (!fileStat.isFile()) {
-    throw new Error("Path does not point to a file.");
   }
 
   return {

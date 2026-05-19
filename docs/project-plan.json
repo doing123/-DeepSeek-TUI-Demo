@@ -42,6 +42,8 @@
     "工作区索引：忽略 .git、node_modules、.next 和真实 .env 文件，只暴露文本文件路径。",
     "只读工具循环：模型可通过严格 JSON 协议请求 list_files、read_file、search_text。",
     "工具 trace：UI 展示每次工具调用的输入和输出摘要。",
+    "补丁预览：模型 final answer 可附带结构化 patchProposal，由 UI 展示待写入文件。",
+    "人工审批：用户点击应用补丁后，服务端重新校验路径和 action，再写入 create/replace 文件。",
     "版本架构图：每次版本更新生成 docs/architecture/architecture-vX.Y.Z.svg 和 latest SVG 快照。",
     "自动文档生成：pre-commit 时运行 npm run docs:generate 并自动 git add README.md docs/architecture。",
     "独立开发上下文：docs/DEVELOPMENT_CONTEXT.md 记录参考项目、实现取舍和下一版 prompt。",
@@ -55,7 +57,8 @@
     "DeepSeek 逻辑独立成 provider，后续可以平滑加入 OpenAI、Claude、本地模型或 OpenRouter。",
     "V0.2 已从 one-shot 仓库快照升级到显式 read-only tool loop，下一步进入补丁预览和人工审批。",
     "工具循环采用 provider-agnostic 的 JSON 协议，方便后续接入原生 function calling 或 CLI/TUI。",
-    "版本架构图使用无依赖 SVG 生成，作为每次版本更新时的视觉快照。"
+    "版本架构图使用无依赖 SVG 生成，作为每次版本更新时的视觉快照。",
+    "V0.3 把写文件拆成 patchProposal、UI 预览、用户确认、服务端安全应用四步，贴近真实 coding agent 的审批边界。"
   ],
   "contextDocuments": [
     {
@@ -97,10 +100,10 @@
       "version": "V0.3",
       "theme": "补丁预览",
       "items": [
-        "生成 unified diff",
-        "人工确认后 apply patch",
-        "变更文件列表",
-        "失败回滚提示"
+        "结构化 patchProposal",
+        "UI 补丁预览",
+        "人工确认后安全写入",
+        "路径和 action 校验"
       ]
     },
     {

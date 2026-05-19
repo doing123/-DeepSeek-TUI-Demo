@@ -2,6 +2,27 @@
 
 All notable project changes are tracked here.
 
+## 0.3.0 - 2026-05-19
+
+### Added
+
+- Added structured `patchProposal` support to agent final answers.
+- Added patch proposal normalization and server-side safety validation.
+- Added `POST /api/patch/apply` for human-approved patch application.
+- Added UI patch preview with file action, explanation, content preview, and explicit apply confirmation.
+- Added workspace write path validation for text-like files inside the repository.
+- Added versioned architecture snapshot generation for `v0.3.0`.
+
+### Changed
+
+- Updated the prompt protocol so DeepSeek can propose `create` and `replace` file changes without applying them directly.
+- Bumped project version to `0.3.0`.
+
+### Notes
+
+- This version still does not run arbitrary shell commands from model output.
+- Patch application currently supports structured full-file `create` and `replace` actions, not arbitrary unified diff hunks.
+
 ## 0.2.0 - 2026-05-09
 
 ### Added
