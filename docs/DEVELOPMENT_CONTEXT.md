@@ -64,7 +64,7 @@ Observed ideas to learn from:
 
 Version: V0.5
 
-The current implementation is a learning workbench with read-only tools, human-approved patch application, whitelist validation commands, and local run history, not a full TUI yet.
+The current implementation is a Node.js 22 + Next.js 16 learning workbench with read-only tools, human-approved patch application, whitelist validation commands, and local run history, not a full TUI yet.
 
 Implemented:
 
@@ -86,6 +86,9 @@ Implemented:
 - Local `.agent-runs` store for lightweight run records.
 - Recent-runs UI for inspecting previous agent results.
 - Validation results can be linked to a saved run by `runId`.
+- VS Code can start a Next inspector session with guarded debug probes for browser-triggered `/api/agent` requests.
+- `npm run debug:check` can verify that `/api/agent` pauses through the inspector without calling DeepSeek.
+- `.nvmrc` and `package.json` engines document Node.js 22 as the local runtime.
 - Generated architecture snapshots in `docs/architecture/`.
 - Offline fallback when `DEEPSEEK_API_KEY` is missing.
 - README generation from `docs/project-plan.json` and `package.json`.
@@ -110,6 +113,8 @@ Important files:
 - `scripts/generate-architecture-diagram.mjs`
 - `scripts/generate-readme.mjs`
 - `.githooks/pre-commit`
+- `.vscode/launch.json`
+- `docs/DEBUGGING.md`
 
 ## Architecture Direction
 
@@ -142,6 +147,8 @@ The V0.5 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 valida
 10. User can run fixed validation commands and inspect output.
 11. Server saves lightweight run records under `.agent-runs`.
 12. UI lists recent runs and can load a saved result.
+
+Debugging uses the official Next.js 16 `next dev --inspect` path. Start `npm run dev:inspect:break`, attach VS Code with `Attach Next.js Server (9229)`, and run `npm run debug:check` to verify that the guarded `debugger` statement in `src/app/api/agent/route.ts` is reachable before testing normal source breakpoints.
 
 ## V0.2 Completed
 
@@ -250,6 +257,7 @@ Read first:
 
 Constraints:
 - Keep DeepSeek as the first provider.
+- Keep Node.js 22 as the local runtime.
 - Keep the browser UI working while adding a small CLI entrypoint.
 - Keep the existing read-only tools.
 - Keep human approval before writes.

@@ -2,7 +2,7 @@
 
 一个用 Next.js、TypeScript 和 DeepSeek 学习 agent 编码工具的最小实现。
 
-> Environment: macOS first
+> Environment: macOS first, Node.js 22
 
 ## Purpose
 
@@ -35,7 +35,7 @@ Architecture snapshots are stored in `docs/architecture/` for version-to-version
 
 ## Current Features
 
-- Next.js + TypeScript 项目骨架。
+- Next.js 16 + React 19 + TypeScript 6 项目骨架。
 - 浏览器工作台：输入目标、运行 agent、查看步骤摘要和建议。
 - 服务端 API：POST /api/agent。
 - DeepSeek provider：读取 DEEPSEEK_API_KEY、DEEPSEEK_BASE_URL、DEEPSEEK_MODEL。
@@ -49,6 +49,9 @@ Architecture snapshots are stored in `docs/architecture/` for version-to-version
 - DeepSeek 实战参数：默认启用 response_format=json_object，显式控制 thinking，并配置 max_tokens。
 - 运行记录：每次 agent run 会保存到本地 .agent-runs，并可在 UI 中回看最近运行。
 - 验证关联：验证命令可关联当前 runId，结果会追加到本地运行记录。
+- Node.js 22 环境声明：仓库包含 .nvmrc 和 package.json engines。
+- 服务端调试入口：VS Code 可附着到 Next.js 16 inspector，并通过浏览器请求命中受控 debug probe。
+- 调试自检脚本：npm run debug:check 可验证 /api/agent 请求是否真的触发服务端暂停。
 - 版本架构图：每次版本更新生成 docs/architecture/architecture-vX.Y.Z.svg 和 latest SVG 快照。
 - 自动文档生成：pre-commit 时运行 npm run docs:generate 并自动 git add README.md docs/architecture。
 - 独立开发上下文：docs/DEVELOPMENT_CONTEXT.md 记录参考项目、实现取舍和下一版 prompt。
@@ -80,12 +83,15 @@ Sources:
 - V0.3 把写文件拆成 patchProposal、UI 预览、用户确认、服务端安全应用四步，贴近真实 coding agent 的审批边界。
 - V0.4 加入白名单验证命令，并按 DeepSeek 官方 JSON Output 和 thinking 参数规则收紧请求。
 - V0.5 引入本地 run history，让每次 agent 运行、补丁元信息和验证结果形成可回看的任务轨迹。
+- 服务端调试先用受控 debugger 语句验证 VS Code 是否附着到真实请求进程，再排查 sourcemap 和普通断点。
+- V0.5 后续维护把运行环境升级到 Node.js 22、Next.js 16 和 React 19，调试入口改用官方 next dev --inspect。
 
 ## Development Context
 
 - `docs/DEVELOPMENT_CONTEXT.md`: 下一版本开发时优先阅读的上下文、参考项目摘要和 prompt。
 - `CHANGELOG.md`: 按版本记录功能、限制和重要取舍。
 - `docs/architecture/`: 按版本保存架构图 SVG，方便横向对比系统演进。
+- `docs/DEBUGGING.md`: 服务端调试步骤，记录如何让浏览器请求触发 Next API 断点。
 
 ## Roadmap
 
@@ -135,6 +141,9 @@ Sources:
 ## Scripts
 
 - `dev`: `next dev`
+- `dev:inspect`: `next dev --inspect=127.0.0.1:9229 -H 127.0.0.1 --webpack`
+- `dev:inspect:break`: `DEBUG_AGENT_ROUTE_BREAK=1 DEBUG_DEEPSEEK_BREAK=1 next dev --inspect=127.0.0.1:9229 -H 127.0.0.1 --webpack`
+- `debug:check`: `node scripts/debug/check-agent-breakpoint.mjs`
 - `build`: `next build`
 - `start`: `next start`
 - `typecheck`: `tsc --noEmit`

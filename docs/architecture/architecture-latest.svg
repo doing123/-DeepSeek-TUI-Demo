@@ -12,7 +12,7 @@
   <rect x="40" y="36" width="1420" height="804" rx="18" fill="#ffffff" stroke="#d9dfd9"/>
 
   <text x="70" y="88" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="32" font-weight="800" fill="#17211b">DeepSeek TUI Demo Architecture</text>
-  <text x="70" y="122" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="16" fill="#5d6a63">Version v0.5.0 · macOS first · generated snapshot</text>
+  <text x="70" y="122" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="16" fill="#5d6a63">Version v0.5.0 · macOS first, Node.js 22 · generated snapshot</text>
 
   <path d="M 342 216 L 418 216" fill="none" stroke="#61706a" stroke-width="2" marker-end="url(#arrow)"/>
   <path d="M 702 216 L 778 216" fill="none" stroke="#61706a" stroke-width="2" marker-end="url(#arrow)"/>

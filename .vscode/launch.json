@@ -1,0 +1,33 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Attach Next.js Server (9229)",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "restart": true,
+      "sourceMaps": true,
+      "outFiles": [
+        "${workspaceFolder}/.next/**/*.js"
+      ],
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/.next/**/*.js",
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ],
+      "skipFiles": [
+        "<node_internals>/**",
+        "${workspaceFolder}/node_modules/**"
+      ],
+      "sourceMapPathOverrides": {
+        "webpack://deepseek-tui-demo/./*": "${workspaceFolder}/*",
+        "webpack://deepseek-tui-demo/*": "${workspaceFolder}/*",
+        "webpack://*/./*": "${workspaceFolder}/*",
+        "webpack-internal:///(rsc)/./*": "${workspaceFolder}/*",
+        "webpack-internal:///(ssr)/./*": "${workspaceFolder}/*",
+        "webpack-internal:///(app-pages-browser)/./*": "${workspaceFolder}/*"
+      }
+    }
+  ]
+}
