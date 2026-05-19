@@ -1,5 +1,5 @@
 #!/bin/sh
 set -e
 
-npm run readme:generate
-git add README.md
+npm run docs:generate
+git add README.md docs/architecture

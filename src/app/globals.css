@@ -243,6 +243,22 @@ button {
   font-weight: 800;
 }
 
+.step-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.step-kind {
+  border-radius: 999px;
+  background: #eef0ea;
+  color: var(--muted);
+  padding: 3px 7px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
 .step-meta {
   color: var(--muted);
   font-size: 13px;
@@ -309,6 +325,20 @@ button {
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 13px;
   line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.trace-code {
+  margin: 4px 0 0;
+  max-height: 180px;
+  overflow: auto;
+  padding: 10px;
+  border-radius: 8px;
+  background: #182722;
+  color: #dff7ec;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.45;
   white-space: pre-wrap;
 }
 

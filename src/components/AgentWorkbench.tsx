@@ -126,6 +126,7 @@ function AgentResultView({ result }: { result: AgentRunResult }) {
             </span>
             <span className="tag tag--neutral">{result.model}</span>
             <span className="tag tag--neutral">{result.workspace.fileCount} files</span>
+            <span className="tag tag--neutral">{result.toolCallCount} tools</span>
           </div>
           <h2>{result.answer.title}</h2>
           <p className="summary">{result.answer.summary}</p>
@@ -163,8 +164,15 @@ function AgentResultView({ result }: { result: AgentRunResult }) {
           <ul className="list">
             {result.steps.map((step) => (
               <li key={`${step.title}-${step.startedAt}`}>
-                <span className="step-title">{step.title}</span>
+                <div className="step-head">
+                  <span className="step-title">{step.title}</span>
+                  {step.kind ? <span className="step-kind">{step.kind}</span> : null}
+                </div>
                 <span className="step-meta">{step.detail}</span>
+                {step.toolInput ? (
+                  <pre className="trace-code">{formatJson(step.toolInput)}</pre>
+                ) : null}
+                {step.toolOutput ? <pre className="trace-code">{step.toolOutput}</pre> : null}
               </li>
             ))}
           </ul>
@@ -201,4 +209,8 @@ function AgentResultView({ result }: { result: AgentRunResult }) {
       </aside>
     </div>
   );
+}
+
+function formatJson(value: unknown) {
+  return JSON.stringify(value, null, 2);
 }

@@ -62,17 +62,22 @@ Observed ideas to learn from:
 
 ## Current State
 
-Version: V0.1
+Version: V0.2
 
-The current implementation is a learning workbench, not a full TUI yet.
+The current implementation is a learning workbench with a read-only agent tool loop, not a full TUI yet.
 
 Implemented:
 
 - Next.js app with a browser workbench.
 - API route at `POST /api/agent`.
 - Agent runner with high-level trace steps.
-- Workspace text-file scan with ignored heavy directories.
+- Workspace text-file index with ignored heavy directories and real `.env` files.
 - DeepSeek provider using OpenAI-compatible chat completions.
+- Provider-agnostic JSON tool-call protocol.
+- Read-only `list_files`, `read_file`, and `search_text` tools.
+- Tool-call limit to avoid runaway loops.
+- UI trace entries for tool input and output summaries.
+- Generated architecture snapshots in `docs/architecture/`.
 - Offline fallback when `DEEPSEEK_API_KEY` is missing.
 - README generation from `docs/project-plan.json` and `package.json`.
 - Git pre-commit hook that regenerates and stages `README.md`.
@@ -82,9 +87,12 @@ Important files:
 - `src/components/AgentWorkbench.tsx`
 - `src/app/api/agent/route.ts`
 - `src/lib/agent/runner.ts`
+- `src/lib/agent/tools.ts`
 - `src/lib/agent/deepseek.ts`
 - `src/lib/agent/workspace.ts`
 - `docs/project-plan.json`
+- `docs/architecture/architecture-latest.svg`
+- `scripts/generate-architecture-diagram.mjs`
 - `scripts/generate-readme.mjs`
 - `.githooks/pre-commit`
 
@@ -102,23 +110,24 @@ UI / future CLI
   -> Approval policy
   -> Workspace changes / command output
   -> Trace + session record
+  -> Generated docs + architecture snapshot
 ```
 
-The next major architectural step is to stop giving the model a large one-shot snapshot and instead let it ask for tools:
+The V0.2 architecture stops giving the model a large one-shot snapshot and instead lets it ask for tools:
 
 1. User submits a goal.
 2. Agent creates a turn state.
 3. Model chooses a tool call such as `list_files`, `read_file`, or `search_text`.
 4. Server validates the tool call against a local policy.
 5. Tool output is appended to the transcript.
-6. Model either requests another tool or returns a proposed patch/answer.
+6. Model either requests another tool or returns a final answer.
 7. UI shows trace, result, and any approval request.
 
-## V0.2 Target
+## V0.2 Completed
 
 Theme: explicit read-only tool loop.
 
-Build:
+Built:
 
 - `src/lib/agent/tools.ts` with typed tool definitions.
 - `list_files`, `read_file`, and `search_text` tools.
@@ -147,6 +156,13 @@ Build:
 - user explicitly approves before applying
 - post-apply typecheck/build can be triggered manually
 
+Do not build yet:
+
+- arbitrary shell execution
+- background task queues
+- sub-agents
+- MCP
+
 ## Safety Rules
 
 - macOS only for now.
@@ -163,22 +179,25 @@ Use this prompt when starting the next version:
 ```txt
 You are continuing DeepSeek TUI Demo.
 
-Goal: implement V0.2, an explicit read-only tool loop for a macOS-first coding-agent learning project built with Next.js and TypeScript.
+Goal: implement V0.3, a patch preview and human approval flow for a macOS-first coding-agent learning project built with Next.js and TypeScript.
 
 Read first:
 - docs/DEVELOPMENT_CONTEXT.md
 - docs/project-plan.json
 - src/lib/agent/runner.ts
 - src/lib/agent/prompts.ts
+- src/lib/agent/tools.ts
 - src/lib/agent/workspace.ts
 
 Constraints:
 - Keep DeepSeek as the first provider.
 - Keep the browser UI, but structure the core so a CLI/TUI can be added later.
-- Add typed tools for list_files, read_file, and search_text.
-- The model should ask for tools through a strict JSON protocol.
-- Limit the loop to a small number of tool calls.
-- Show tool calls in the UI trace.
-- Do not implement file writes or shell execution yet.
+- Keep the existing read-only tools.
+- Add a patch proposal format, but do not apply changes automatically.
+- Validate patch paths against the workspace root.
+- Show patch preview in the UI.
+- Require explicit user approval before applying a patch.
+- Do not implement arbitrary shell execution yet.
 - Update README through npm run readme:generate.
+- Run npm run docs:generate so the versioned architecture SVG is updated.
 ```

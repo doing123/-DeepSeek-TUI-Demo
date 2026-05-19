@@ -22,12 +22,16 @@ Open http://localhost:3000 and run a goal from the workbench.
 
 ## Architecture
 
+![Architecture v0.3.0](docs/architecture/architecture-v0.3.0.svg)
+
 - **Next.js App**: 负责输入任务、展示 agent trace、展示结构化建议。
 - **API Route**: 运行在 Node.js 服务端，读取环境变量和本地仓库。
 - **Agent Runner**: 组织任务理解、仓库扫描、LLM 调用、结果解析。
 - **DeepSeek Provider**: 封装 OpenAI-compatible chat completions 请求，默认使用 DeepSeek。
 - **Workspace Tools**: 当前支持安全只读扫描，后续扩展 read_file、write_patch、run_command。
 - **README Generator**: 从项目规划数据和 package scripts 生成 README，并由 pre-commit hook 自动执行。
+
+Architecture snapshots are stored in `docs/architecture/` for version-to-version comparison.
 
 ## Current Features
 
@@ -36,8 +40,13 @@ Open http://localhost:3000 and run a goal from the workbench.
 - 服务端 API：POST /api/agent。
 - DeepSeek provider：读取 DEEPSEEK_API_KEY、DEEPSEEK_BASE_URL、DEEPSEEK_MODEL。
 - 离线模式：没有 API key 时仍能返回本地规划结果。
-- 工作区扫描：忽略 .git、node_modules、.next，读取文本文件摘要。
-- 自动 README：pre-commit 时运行 npm run readme:generate 并自动 git add README.md。
+- 工作区索引：忽略 .git、node_modules、.next 和真实 .env 文件，只暴露文本文件路径。
+- 只读工具循环：模型可通过严格 JSON 协议请求 list_files、read_file、search_text。
+- 工具 trace：UI 展示每次工具调用的输入和输出摘要。
+- 补丁预览：模型 final answer 可附带结构化 patchProposal，由 UI 展示待写入文件。
+- 人工审批：用户点击应用补丁后，服务端重新校验路径和 action，再写入 create/replace 文件。
+- 版本架构图：每次版本更新生成 docs/architecture/architecture-vX.Y.Z.svg 和 latest SVG 快照。
+- 自动文档生成：pre-commit 时运行 npm run docs:generate 并自动 git add README.md docs/architecture。
 - 独立开发上下文：docs/DEVELOPMENT_CONTEXT.md 记录参考项目、实现取舍和下一版 prompt。
 - 独立变更日志：CHANGELOG.md 记录每个版本新增内容和限制。
 
@@ -61,12 +70,16 @@ Sources:
 - LLM 输出要求结构化 JSON，这样 UI 和后续自动化都更稳定。
 - 保留的是高层实现步骤与取舍，不记录逐字隐藏推理。
 - DeepSeek 逻辑独立成 provider，后续可以平滑加入 OpenAI、Claude、本地模型或 OpenRouter。
-- 下一步从 one-shot 仓库快照升级到显式 read-only tool loop，再进入补丁预览和人工审批。
+- V0.2 已从 one-shot 仓库快照升级到显式 read-only tool loop，下一步进入补丁预览和人工审批。
+- 工具循环采用 provider-agnostic 的 JSON 协议，方便后续接入原生 function calling 或 CLI/TUI。
+- 版本架构图使用无依赖 SVG 生成，作为每次版本更新时的视觉快照。
+- V0.3 把写文件拆成 patchProposal、UI 预览、用户确认、服务端安全应用四步，贴近真实 coding agent 的审批边界。
 
 ## Development Context
 
 - `docs/DEVELOPMENT_CONTEXT.md`: 下一版本开发时优先阅读的上下文、参考项目摘要和 prompt。
 - `CHANGELOG.md`: 按版本记录功能、限制和重要取舍。
+- `docs/architecture/`: 按版本保存架构图 SVG，方便横向对比系统演进。
 
 ## Roadmap
 
@@ -80,17 +93,17 @@ Sources:
 
 ### V0.2 · 工具调用雏形
 
-- list_files/read_file 显式工具协议
-- 模型多轮选择工具
-- token 预算与文件摘录策略
-- 更完整的错误提示
+- list_files/read_file/search_text 显式工具协议
+- 模型多轮选择只读工具
+- 工具调用次数上限
+- 工具输入和输出摘要 trace
 
 ### V0.3 · 补丁预览
 
-- 生成 unified diff
-- 人工确认后 apply patch
-- 变更文件列表
-- 失败回滚提示
+- 结构化 patchProposal
+- UI 补丁预览
+- 人工确认后安全写入
+- 路径和 action 校验
 
 ### V0.4 · 命令执行与验证
 
@@ -113,6 +126,8 @@ Sources:
 - `build`: `next build`
 - `start`: `next start`
 - `typecheck`: `tsc --noEmit`
+- `architecture:generate`: `node scripts/generate-architecture-diagram.mjs`
+- `docs:generate`: `npm run architecture:generate && npm run readme:generate`
 - `readme:generate`: `node scripts/generate-readme.mjs`
 - `hooks:install`: `node scripts/install-git-hooks.mjs`
 - `prepare`: `node scripts/install-git-hooks.mjs`
@@ -124,8 +139,8 @@ This README is generated from `docs/project-plan.json` and `package.json`.
 The repository uses `.githooks/pre-commit` to run:
 
 ```bash
-npm run readme:generate
-git add README.md
+npm run docs:generate
+git add README.md docs/architecture
 ```
 
 If hooks are not active after cloning, run:

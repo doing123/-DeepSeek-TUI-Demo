@@ -2,6 +2,29 @@
 
 All notable project changes are tracked here.
 
+## 0.2.0 - 2026-05-09
+
+### Added
+
+- Added generated architecture snapshots under `docs/architecture/`.
+- Added `npm run architecture:generate` and `npm run docs:generate`.
+- Added the current architecture SVG to README.
+- Added a provider-agnostic JSON tool-call protocol for the agent loop.
+- Added read-only `list_files`, `read_file`, and `search_text` tools.
+- Added path safety checks that keep tool reads inside the workspace.
+- Added a tool-call limit to prevent runaway model loops.
+- Added tool input/output summaries to the workbench trace.
+- Updated generated README, project plan, and development context for the next version.
+
+### Changed
+
+- Replaced the DeepSeek path from a one-shot workspace snapshot prompt with a multi-turn read-only tool loop.
+- Changed workspace discovery so real `.env` files are ignored while `.env.example` remains readable.
+
+### Notes
+
+- This version still does not write files, apply patches, or run shell commands from model output.
+
 ## 0.1.0 - 2026-05-09
 
 ### Added

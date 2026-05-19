@@ -4,14 +4,29 @@ import {
   getDeepSeekConfig,
   hasDeepSeekKey
 } from "./deepseek";
-import { buildCodingAgentMessages } from "./prompts";
-import type { AgentAnswer, AgentRunResult, AgentStep } from "./types";
-import { getWorkspaceSnapshot } from "./workspace";
+import { buildCodingAgentMessages, buildToolResultMessage } from "./prompts";
+import {
+  createToolCall,
+  executeReadOnlyTool,
+  isReadOnlyToolName,
+  READ_ONLY_TOOL_DEFINITIONS,
+  summarizeToolOutput
+} from "./tools";
+import type {
+  AgentAnswer,
+  AgentRunResult,
+  AgentStep,
+  ToolCall,
+  WorkspaceSnapshot
+} from "./types";
+import { listWorkspaceFiles } from "./workspace";
 
 type RunCodingAgentInput = {
   goal: string;
   workspaceRoot: string;
 };
+
+const MAX_TOOL_CALLS = 6;
 
 export async function runCodingAgent({
   goal,
@@ -21,14 +36,23 @@ export async function runCodingAgent({
   const steps: AgentStep[] = [];
   const config = getDeepSeekConfig();
 
-  pushStep(steps, "理解目标", `收到任务：${goal}`);
+  pushStep(steps, "理解目标", `收到任务：${goal}`, { kind: "system" });
 
-  pushStep(steps, "扫描工作区", "读取仓库内的文本文件，并截取关键内容作为上下文。");
-  const snapshot = await getWorkspaceSnapshot(workspaceRoot);
-  completeLatestStep(steps, `已读取 ${snapshot.fileCount} 个文本文件。`);
+  pushStep(steps, "建立文件索引", "列出仓库内可读的文本文件，作为工具循环的初始地图。", {
+    kind: "system"
+  });
+  const files = await listWorkspaceFiles(workspaceRoot, { maxFiles: 160 });
+  const snapshot: WorkspaceSnapshot = {
+    root: workspaceRoot,
+    fileCount: files.length,
+    files
+  };
+  completeLatestStep(steps, `已索引 ${snapshot.fileCount} 个文本文件。`);
 
   if (!hasDeepSeekKey(config)) {
-    pushStep(steps, "使用离线模式", "未检测到 DEEPSEEK_API_KEY，返回本地规划结果。");
+    pushStep(steps, "使用离线模式", "未检测到 DEEPSEEK_API_KEY，返回本地规划结果。", {
+      kind: "system"
+    });
 
     return {
       id: randomUUID(),
@@ -42,22 +66,136 @@ export async function runCodingAgent({
         root: snapshot.root,
         fileCount: snapshot.fileCount
       },
+      toolCallCount: 0,
       answer: buildOfflineAnswer(snapshot.fileCount)
     };
   }
 
-  pushStep(steps, "调用 DeepSeek", `模型：${config.model}，base URL：${config.baseUrl}`);
-  const messages = buildCodingAgentMessages(goal, snapshot);
-  const completion = await completeWithDeepSeek(messages, config);
-  completeLatestStep(steps, `收到 ${completion.model} 的响应。`);
+  const messages = buildCodingAgentMessages(
+    goal,
+    snapshot,
+    READ_ONLY_TOOL_DEFINITIONS,
+    MAX_TOOL_CALLS
+  );
+  let toolCallCount = 0;
+  let model = config.model;
+  let rawText: string | undefined;
 
-  const parsed = parseAgentAnswer(completion.content);
+  while (toolCallCount <= MAX_TOOL_CALLS) {
+    pushStep(
+      steps,
+      "调用 DeepSeek",
+      `第 ${toolCallCount + 1} 轮，模型：${config.model}，base URL：${config.baseUrl}`,
+      { kind: "model" }
+    );
+    const completion = await completeWithDeepSeek(messages, config);
+    model = completion.model;
+    rawText = completion.content;
+    completeLatestStep(steps, `收到 ${completion.model} 的响应。`);
 
+    messages.push({
+      role: "assistant",
+      content: completion.content
+    });
+
+    const parsed = parseModelResponse(completion.content);
+
+    if (parsed.type === "final") {
+      return buildRunResult({
+        goal,
+        model,
+        startedAt,
+        steps,
+        snapshot,
+        toolCallCount,
+        answer: parsed.answer,
+        rawText: parsed.rawText
+      });
+    }
+
+    if (parsed.type === "invalid") {
+      return buildRunResult({
+        goal,
+        model,
+        startedAt,
+        steps,
+        snapshot,
+        toolCallCount,
+        answer: buildInvalidResponseAnswer(parsed.reason, completion.content),
+        rawText: completion.content
+      });
+    }
+
+    if (toolCallCount >= MAX_TOOL_CALLS) {
+      return buildRunResult({
+        goal,
+        model,
+        startedAt,
+        steps,
+        snapshot,
+        toolCallCount,
+        answer: buildToolLimitAnswer(MAX_TOOL_CALLS),
+        rawText
+      });
+    }
+
+    toolCallCount += 1;
+    pushStep(
+      steps,
+      `工具调用：${parsed.call.name}`,
+      "执行服务端只读工具，并把结果回填给模型。",
+      {
+        kind: "tool",
+        toolName: parsed.call.name,
+        toolInput: parsed.call.input
+      }
+    );
+    const result = await executeReadOnlyTool(parsed.call, {
+      workspaceRoot
+    });
+    completeLatestStep(steps, result.summary, {
+      ok: result.ok,
+      toolOutput: summarizeToolOutput(result)
+    });
+    messages.push(buildToolResultMessage(result));
+  }
+
+  return buildRunResult({
+    goal,
+    model,
+    startedAt,
+    steps,
+    snapshot,
+    toolCallCount,
+    answer: buildToolLimitAnswer(MAX_TOOL_CALLS),
+    rawText
+  });
+}
+
+function buildRunResult({
+  goal,
+  model,
+  startedAt,
+  steps,
+  snapshot,
+  toolCallCount,
+  answer,
+  rawText
+}: {
+  goal: string;
+  model: string;
+  startedAt: string;
+  steps: AgentStep[];
+  snapshot: WorkspaceSnapshot;
+  toolCallCount: number;
+  answer: AgentAnswer;
+  rawText?: string;
+}): AgentRunResult {
   return {
     id: randomUUID(),
     goal,
     mode: "deepseek",
-    model: completion.model,
+    model,
     startedAt,
     completedAt: new Date().toISOString(),
     steps,
@@ -65,20 +203,27 @@ export async function runCodingAgent({
       root: snapshot.root,
       fileCount: snapshot.fileCount
     },
-    answer: parsed.answer,
-    rawText: parsed.rawText
+    toolCallCount,
+    answer,
+    rawText
   };
 }
 
-function pushStep(steps: AgentStep[], title: string, detail: string) {
+function pushStep(
+  steps: AgentStep[],
+  title: string,
+  detail: string,
+  extra: Partial<AgentStep> = {}
+) {
   steps.push({
     title,
     detail,
-    startedAt: new Date().toISOString()
+    startedAt: new Date().toISOString(),
+    ...extra
   });
 }
 
-function completeLatestStep(steps: AgentStep[], detail?: string) {
+function completeLatestStep(steps: AgentStep[], detail?: string, extra: Partial<AgentStep> = {}) {
   const latest = steps.at(-1);
 
   if (!latest) {
@@ -90,27 +235,28 @@ function completeLatestStep(steps: AgentStep[], detail?: string) {
   }
 
   latest.completedAt = new Date().toISOString();
+  Object.assign(latest, extra);
 }
 
 function buildOfflineAnswer(fileCount: number): AgentAnswer {
   return {
-    title: "本地最小 Agent 已就绪",
+    title: "只读工具循环已就绪",
     summary:
-      "当前运行在离线模式。V0 已经具备仓库扫描、任务接收、步骤摘要和 DeepSeek provider 接口；配置 DEEPSEEK_API_KEY 后即可让模型基于仓库快照生成建议。",
+      "当前运行在离线模式。V0.2 已经具备 list_files、read_file、search_text 的只读工具协议；配置 DEEPSEEK_API_KEY 后模型会通过工具循环逐步理解仓库。",
     plan: [
       "把 Web UI 作为任务入口，收集用户的编码目标。",
-      "在 API route 中运行 agent，保持服务端访问仓库和密钥。",
-      `扫描当前工作区，最多采集 ${fileCount} 个文本文件作为上下文。`,
-      "优先让模型输出结构化 JSON，方便 UI 呈现和后续自动化。"
+      `服务端先索引当前工作区的 ${fileCount} 个文本文件。`,
+      "模型通过严格 JSON 请求只读工具，服务端执行后把结果回填。",
+      "模型在信息足够时输出结构化 final answer。"
     ],
     filesToInspect: [
       "src/app/api/agent/route.ts",
       "src/lib/agent/runner.ts",
+      "src/lib/agent/tools.ts",
       "src/lib/agent/deepseek.ts",
       "src/lib/agent/workspace.ts"
     ],
     proposedChanges: [
-      "V0.2 可以加入工具调用协议，让模型先选择 read_file/list_files，再生成补丁。",
       "V0.3 可以加入补丁预览和人工确认，避免 agent 直接写坏仓库。",
       "V0.4 可以加入终端命令白名单，用于运行 typecheck/test/build。"
     ],
@@ -122,33 +268,109 @@ function buildOfflineAnswer(fileCount: number): AgentAnswer {
     nextActions: [
       "复制 .env.example 为 .env.local 并填写 DEEPSEEK_API_KEY。",
       "运行 npm run dev 后在浏览器中测试任务输入。",
-      "实现 V0.2 的 read_file 工具调用与 patch 预览。"
+      "实现 V0.3 的 patch preview 和人工审批。"
     ]
   };
 }
 
-function parseAgentAnswer(content: string): { answer: AgentAnswer; rawText?: string } {
+type ParsedModelResponse =
+  | {
+      type: "tool_call";
+      call: ToolCall;
+    }
+  | {
+      type: "final";
+      answer: AgentAnswer;
+      rawText?: string;
+    }
+  | {
+      type: "invalid";
+      reason: string;
+    };
+
+function parseModelResponse(content: string): ParsedModelResponse {
   const normalized = stripJsonFence(content);
 
   try {
-    const parsed = JSON.parse(normalized) as Partial<AgentAnswer>;
+    const parsed = JSON.parse(normalized) as unknown;
+
+    if (!isRecord(parsed)) {
+      return {
+        type: "invalid",
+        reason: "模型返回的 JSON 顶层必须是对象。"
+      };
+    }
+
+    if (parsed.type === "final") {
+      return {
+        type: "final",
+        answer: normalizeAnswer(readRecord(parsed.answer))
+      };
+    }
+
+    if (parsed.type === "tool_call") {
+      return parseToolCall(parsed.tool);
+    }
+
+    if ("tool_call" in parsed) {
+      return parseToolCall(parsed.tool_call);
+    }
+
+    if ("title" in parsed || "summary" in parsed || "plan" in parsed) {
+      return {
+        type: "final",
+        answer: normalizeAnswer(parsed)
+      };
+    }
+
     return {
-      answer: normalizeAnswer(parsed)
+      type: "invalid",
+      reason: "模型返回的 JSON 缺少 type=tool_call 或 type=final。"
     };
   } catch {
     return {
-      answer: {
-        title: "DeepSeek 返回了非 JSON 内容",
-        summary: content,
-        plan: ["调整 prompt 或模型参数，让输出稳定为 JSON。"],
-        filesToInspect: [],
-        proposedChanges: [],
-        risks: ["UI 无法结构化展示非 JSON 响应。"],
-        nextActions: ["保留原始输出，下一版增加更健壮的 JSON 修复。"]
-      },
-      rawText: content
+      type: "invalid",
+      reason: "模型返回了非 JSON 内容。"
     };
   }
+}
+
+function parseToolCall(value: unknown): ParsedModelResponse {
+  if (!isRecord(value) || !isReadOnlyToolName(value.name)) {
+    return {
+      type: "invalid",
+      reason: "工具调用必须包含合法的 name。"
+    };
+  }
+
+  return {
+    type: "tool_call",
+    call: createToolCall(value.name, readRecord(value.input))
+  };
+}
+
+function buildInvalidResponseAnswer(reason: string, rawText: string): AgentAnswer {
+  return {
+    title: "模型响应无法继续执行",
+    summary: `${reason}\n\n原始响应：${rawText}`,
+    plan: ["调整 prompt 或模型参数，让输出稳定遵循 tool_call/final JSON 协议。"],
+    filesToInspect: ["src/lib/agent/prompts.ts", "src/lib/agent/runner.ts"],
+    proposedChanges: ["下一版可以增加 JSON 修复器或更细的模型响应校验错误提示。"],
+    risks: ["模型没有遵循协议时，agent 会停止而不是猜测执行。"],
+    nextActions: ["检查 rawText，必要时收紧 system prompt 或切换模型。"]
+  };
+}
+
+function buildToolLimitAnswer(limit: number): AgentAnswer {
+  return {
+    title: "工具调用次数达到上限",
+    summary: `本次运行已经执行 ${limit} 次只读工具调用。为了避免无限循环，agent 已停止并返回当前状态。`,
+    plan: ["缩小任务范围，或让模型更早输出 final。"],
+    filesToInspect: ["src/lib/agent/runner.ts", "src/lib/agent/prompts.ts"],
+    proposedChanges: ["下一版可以按任务复杂度动态调整工具调用上限。"],
+    risks: ["工具循环上限过低会导致复杂任务无法收敛。"],
+    nextActions: ["重新运行任务，或把目标拆成更小的子任务。"]
+  };
 }
 
 function normalizeAnswer(answer: Partial<AgentAnswer>): AgentAnswer {
@@ -161,6 +383,14 @@ function normalizeAnswer(answer: Partial<AgentAnswer>): AgentAnswer {
     risks: readStringArray(answer.risks, ["补充风险点。"]),
     nextActions: readStringArray(answer.nextActions, ["补充下一步。"])
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function readRecord(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {};
 }
 
 function stripJsonFence(content: string) {

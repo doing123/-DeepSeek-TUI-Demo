@@ -25,7 +25,11 @@ Open http://localhost:3000 and run a goal from the workbench.
 
 ## Architecture
 
+![Architecture v${packageJson.version}](docs/architecture/architecture-v${packageJson.version}.svg)
+
 ${plan.architecture.map((item) => `- **${item.name}**: ${item.description}`).join("\n")}
+
+Architecture snapshots are stored in \`docs/architecture/\` for version-to-version comparison.
 
 ## Current Features
 
@@ -73,8 +77,8 @@ This README is generated from \`docs/project-plan.json\` and \`package.json\`.
 The repository uses \`.githooks/pre-commit\` to run:
 
 \`\`\`bash
-npm run readme:generate
-git add README.md
+npm run docs:generate
+git add README.md docs/architecture
 \`\`\`
 
 If hooks are not active after cloning, run:
