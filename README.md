@@ -22,13 +22,14 @@ Open http://localhost:3000 and run a goal from the workbench.
 
 ## Architecture
 
-![Architecture v0.5.0](docs/architecture/architecture-v0.5.0.svg)
+![Architecture v0.6.0](docs/architecture/architecture-v0.6.0.svg)
 
 - **Next.js App**: 负责输入任务、展示 agent trace、展示结构化建议。
+- **CLI Shell**: 通过 npm run agent 直接复用 agent runner，提供终端入口、trace 输出和运行历史回看。
 - **API Route**: 运行在 Node.js 服务端，读取环境变量和本地仓库。
 - **Agent Runner**: 组织任务理解、仓库扫描、LLM 调用、结果解析。
 - **DeepSeek Provider**: 封装 OpenAI-compatible chat completions 请求，默认使用 DeepSeek。
-- **Workspace Tools**: 当前支持安全只读扫描，后续扩展 read_file、write_patch、run_command。
+- **Workspace Tools**: 当前支持安全只读扫描、文件读取、文本搜索和 Git 状态读取，后续扩展 write_patch、run_command。
 - **README Generator**: 从项目规划数据和 package scripts 生成 README，并由 pre-commit hook 自动执行。
 
 Architecture snapshots are stored in `docs/architecture/` for version-to-version comparison.
@@ -37,11 +38,15 @@ Architecture snapshots are stored in `docs/architecture/` for version-to-version
 
 - Next.js 16 + React 19 + TypeScript 6 项目骨架。
 - 浏览器工作台：输入目标、运行 agent、查看步骤摘要和建议。
+- 终端入口：npm run agent 可直接运行同一套 agent runner，不依赖本地 Next 服务。
+- CLI 状态视图：终端展示 answer、plan、filesToInspect、patchProposal 摘要和可选 trace。
+- CLI 运行历史：终端支持 --recent 和 --show 回看 .agent-runs 中的历史记录。
 - 服务端 API：POST /api/agent。
 - DeepSeek provider：读取 DEEPSEEK_API_KEY、DEEPSEEK_BASE_URL、DEEPSEEK_MODEL。
 - 离线模式：没有 API key 时仍能返回本地规划结果。
 - 工作区索引：忽略 .git、node_modules、.next 和真实 .env 文件，只暴露文本文件路径。
-- 只读工具循环：模型可通过严格 JSON 协议请求 list_files、read_file、search_text。
+- 只读工具循环：模型可通过严格 JSON 协议请求 list_files、read_file、search_text、git_status。
+- Git 只读上下文：agent 可读取当前分支、短状态、diff stat 和最近提交。
 - 工具 trace：UI 展示每次工具调用的输入和输出摘要。
 - 补丁预览：模型 final answer 可附带结构化 patchProposal，由 UI 展示待写入文件。
 - 人工审批：用户点击应用补丁后，服务端重新校验路径和 action，再写入 create/replace 文件。
@@ -85,6 +90,8 @@ Sources:
 - V0.5 引入本地 run history，让每次 agent 运行、补丁元信息和验证结果形成可回看的任务轨迹。
 - 服务端调试先用受控 debugger 语句验证 VS Code 是否附着到真实请求进程，再排查 sourcemap 和普通断点。
 - V0.5 后续维护把运行环境升级到 Node.js 22、Next.js 16 和 React 19，调试入口改用官方 next dev --inspect。
+- V0.6 让终端入口直接复用 agent runner，而不是绕 HTTP 调用本地页面服务，后续再演进为真正 TUI。
+- V0.6 的 Git 工具保持只读和固定命令列表，先让模型理解工作区状态，暂不允许模型执行任意 shell。
 
 ## Development Context
 
@@ -92,6 +99,7 @@ Sources:
 - `CHANGELOG.md`: 按版本记录功能、限制和重要取舍。
 - `docs/architecture/`: 按版本保存架构图 SVG，方便横向对比系统演进。
 - `docs/DEBUGGING.md`: 服务端调试步骤，记录如何让浏览器请求触发 Next API 断点。
+- `docs/CLI.md`: 终端入口使用说明，记录 V0.6 CLI 的命令、能力和限制。
 
 ## Roadmap
 
@@ -134,9 +142,16 @@ Sources:
 ### V0.6 · 终端/TUI 外壳
 
 - CLI 命令入口
-- TUI 状态视图
-- 会话恢复
+- 终端状态视图
+- 运行历史回看
 - Git 只读工具
+
+### V0.7 · 流式终端与审批
+
+- CLI 流式 trace
+- 终端补丁审批
+- 验证命令串联
+- 更完整的会话恢复
 
 ## Scripts
 
@@ -144,6 +159,7 @@ Sources:
 - `dev:inspect`: `next dev --inspect=127.0.0.1:9229 -H 127.0.0.1 --webpack`
 - `dev:inspect:break`: `DEBUG_AGENT_ROUTE_BREAK=1 DEBUG_DEEPSEEK_BREAK=1 next dev --inspect=127.0.0.1:9229 -H 127.0.0.1 --webpack`
 - `debug:check`: `node scripts/debug/check-agent-breakpoint.mjs`
+- `agent`: `node --import tsx src/cli/agent.ts`
 - `build`: `next build`
 - `start`: `next start`
 - `typecheck`: `tsc --noEmit`

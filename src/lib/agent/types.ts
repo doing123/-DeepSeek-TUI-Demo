@@ -1,6 +1,6 @@
 export type AgentMode = "deepseek" | "offline";
 
-export type ReadOnlyToolName = "list_files" | "read_file" | "search_text";
+export type ReadOnlyToolName = "list_files" | "read_file" | "search_text" | "git_status";
 
 export type AgentMessage = {
   role: "system" | "user" | "assistant";

@@ -10,6 +10,7 @@ import {
   readWorkspaceFile,
   searchWorkspaceText
 } from "./workspace";
+import { getGitStatusSummary } from "./git-tools";
 
 export const READ_ONLY_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
@@ -60,6 +61,15 @@ export const READ_ONLY_TOOL_DEFINITIONS: ToolDefinition[] = [
         }
       }
     }
+  },
+  {
+    name: "git_status",
+    description:
+      "Read the current Git branch, short status, diff stat, and recent commits. This is read-only.",
+    inputSchema: {
+      type: "object",
+      properties: {}
+    }
   }
 ];
 
@@ -75,7 +85,8 @@ export function isReadOnlyToolName(value: unknown): value is ReadOnlyToolName {
   return (
     value === "list_files" ||
     value === "read_file" ||
-    value === "search_text"
+    value === "search_text" ||
+    value === "git_status"
   );
 }
 
@@ -110,6 +121,18 @@ export async function executeReadOnlyTool(
         ok: true,
         summary: `Read ${file.path}${file.truncated ? " with truncation" : ""}.`,
         output: file
+      };
+    }
+
+    if (call.name === "git_status") {
+      const status = await getGitStatusSummary(context.workspaceRoot);
+
+      return {
+        callId: call.id,
+        name: call.name,
+        ok: true,
+        summary: `Read Git status for ${status.branch}.`,
+        output: status
       };
     }
 

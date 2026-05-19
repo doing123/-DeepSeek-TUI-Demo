@@ -30,8 +30,8 @@ function buildSvg({ title, version, environment, features, roadmap }) {
   const nodes = [
     {
       id: "ui",
-      label: "Next.js Workbench",
-      detail: "任务输入 / trace 展示 / 后续 CLI-TUI 外壳",
+      label: "Workbench + CLI",
+      detail: "浏览器工作台 / npm run agent / trace 输出",
       x: 70,
       y: 170,
       w: 260,
@@ -81,7 +81,7 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     {
       id: "tools",
       label: "Read-only Tools",
-      detail: "list_files / read_file / search_text",
+      detail: "list_files / read_file / search_text / git_status",
       x: 430,
       y: 345,
       w: 260,
@@ -231,6 +231,10 @@ function pickFeatureHighlights(features) {
     [
       "服务端 API",
       "只读工具循环",
+      "终端入口",
+      "CLI 状态视图",
+      "CLI 运行历史",
+      "Git 只读上下文",
       "工具 trace",
       "补丁预览",
       "人工审批",

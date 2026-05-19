@@ -6,6 +6,8 @@ export function buildCodingAgentMessages(
   tools: ToolDefinition[],
   maxToolCalls: number
 ): AgentMessage[] {
+  const toolNames = tools.map((tool) => tool.name).join("|");
+
   return [
     {
       role: "system",
@@ -16,7 +18,7 @@ export function buildCodingAgentMessages(
         "当前版本禁止写文件、执行 shell、修改 git、联网搜索或调用未列出的工具。",
         `最多请求 ${maxToolCalls} 次工具。信息足够时必须给 final。`,
         "必须返回严格 JSON，不要使用 Markdown 代码块。",
-        "如果需要工具，返回：{\"type\":\"tool_call\",\"tool\":{\"name\":\"list_files|read_file|search_text\",\"input\":{...}}}",
+        `如果需要工具，返回：{"type":"tool_call","tool":{"name":"${toolNames}","input":{...}}}`,
         "如果完成任务，返回：{\"type\":\"final\",\"answer\":{\"title\": string, \"summary\": string, \"plan\": string[], \"filesToInspect\": string[], \"proposedChanges\": string[], \"risks\": string[], \"nextActions\": string[], \"patchProposal\"?: {\"summary\": string, \"files\": [{\"path\": string, \"action\": \"create\"|\"replace\", \"content\": string, \"explanation\"?: string}]}}}",
         "只有当用户明确要求实现代码或修改文件时，才返回 patchProposal。",
         "patchProposal 必须使用完整文件内容；path 必须是仓库相对路径；禁止修改 .env、.git、node_modules、.next 或二进制文件。",

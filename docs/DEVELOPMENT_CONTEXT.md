@@ -62,9 +62,9 @@ Observed ideas to learn from:
 
 ## Current State
 
-Version: V0.5
+Version: V0.6
 
-The current implementation is a Node.js 22 + Next.js 16 learning workbench with read-only tools, human-approved patch application, whitelist validation commands, and local run history, not a full TUI yet.
+The current implementation is a Node.js 22 + Next.js 16 learning workbench plus a small CLI shell. It has read-only tools, human-approved patch application, whitelist validation commands, local run history, and a terminal entrypoint, not a full-screen TUI yet.
 
 Implemented:
 
@@ -74,9 +74,12 @@ Implemented:
 - Workspace text-file index with ignored heavy directories and real `.env` files.
 - DeepSeek provider using OpenAI-compatible chat completions.
 - Provider-agnostic JSON tool-call protocol.
-- Read-only `list_files`, `read_file`, and `search_text` tools.
+- Read-only `list_files`, `read_file`, `search_text`, and `git_status` tools.
 - Tool-call limit to avoid runaway loops.
 - UI trace entries for tool input and output summaries.
+- CLI entrypoint at `src/cli/agent.ts`, runnable with `npm run agent`.
+- CLI output for answer, plan, files, patch proposal summary, optional trace, recent runs, and saved run detail.
+- The `tsx` Node loader is used so the CLI can run TypeScript modules directly in development.
 - Structured `patchProposal` final answer format.
 - UI patch preview with explicit confirmation before writes.
 - Server-side patch apply API with workspace path validation.
@@ -100,6 +103,8 @@ Important files:
 - `src/app/api/agent/route.ts`
 - `src/lib/agent/runner.ts`
 - `src/lib/agent/tools.ts`
+- `src/lib/agent/git-tools.ts`
+- `src/cli/agent.ts`
 - `src/lib/agent/patches.ts`
 - `src/lib/agent/validation.ts`
 - `src/lib/agent/run-store.ts`
@@ -115,14 +120,15 @@ Important files:
 - `.githooks/pre-commit`
 - `.vscode/launch.json`
 - `docs/DEBUGGING.md`
+- `docs/CLI.md`
 
 ## Architecture Direction
 
 Keep the architecture intentionally small:
 
 ```txt
-UI / future CLI
-  -> API or local command handler
+UI / CLI
+  -> API route or direct local command handler
   -> Agent runner
   -> Prompt builder
   -> Provider client
@@ -133,11 +139,11 @@ UI / future CLI
   -> Generated docs + architecture snapshot
 ```
 
-The V0.5 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 validation, and adds run history:
+The V0.6 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 validation, V0.5 run history, and adds a terminal shell:
 
 1. User submits a goal.
 2. Agent creates a turn state.
-3. Model chooses a tool call such as `list_files`, `read_file`, or `search_text`.
+3. Model chooses a tool call such as `list_files`, `read_file`, `search_text`, or `git_status`.
 4. Server validates the tool call against a local policy.
 5. Tool output is appended to the transcript.
 6. Model either requests another tool or returns a final answer.
@@ -146,7 +152,8 @@ The V0.5 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 valida
 9. Server validates paths/actions before writing files.
 10. User can run fixed validation commands and inspect output.
 11. Server saves lightweight run records under `.agent-runs`.
-12. UI lists recent runs and can load a saved result.
+12. UI and CLI can list recent runs and load a saved result.
+13. CLI can run the same agent runner directly without starting the Next dev server.
 
 Debugging uses the official Next.js 16 `next dev --inspect` path. Start `npm run dev:inspect:break`, attach VS Code with `Attach Next.js Server (9229)`, and run `npm run debug:check` to verify that the guarded `debugger` statement in `src/app/api/agent/route.ts` is reachable before testing normal source breakpoints.
 
@@ -226,6 +233,27 @@ Do not build yet:
 - multi-turn conversation resume
 - remote/shared run storage
 
+## V0.6 Completed
+
+Theme: terminal shell and Git read-only context.
+
+Built:
+
+- `npm run agent -- "goal"` direct CLI entrypoint.
+- `--trace` compact terminal trace output.
+- `--recent` and `--show <run-id>` run-history readback.
+- `--json` output for automation and debugging.
+- `.env.local` loading for the direct CLI path.
+- `git_status` read-only tool with fixed Git commands.
+- `docs/CLI.md` usage guide.
+
+Do not build yet:
+
+- full-screen terminal UI framework
+- terminal patch apply flow
+- model-suggested arbitrary shell execution
+- long-lived multi-turn session resume
+
 ## Safety Rules
 
 - macOS only for now.
@@ -242,7 +270,7 @@ Use this prompt when starting the next version:
 ```txt
 You are continuing DeepSeek TUI Demo.
 
-Goal: implement V0.6, a terminal/TUI shell for a macOS-first coding-agent learning project built with Next.js and TypeScript.
+Goal: implement V0.7, streaming terminal feedback and safer terminal-side approval for a macOS-first coding-agent learning project built with Next.js and TypeScript.
 
 Read first:
 - docs/DEVELOPMENT_CONTEXT.md
@@ -250,21 +278,24 @@ Read first:
 - src/lib/agent/runner.ts
 - src/lib/agent/prompts.ts
 - src/lib/agent/tools.ts
+- src/lib/agent/git-tools.ts
 - src/lib/agent/patches.ts
 - src/lib/agent/validation.ts
 - src/lib/agent/run-store.ts
 - src/lib/agent/workspace.ts
+- src/cli/agent.ts
 
 Constraints:
 - Keep DeepSeek as the first provider.
 - Keep Node.js 22 as the local runtime.
-- Keep the browser UI working while adding a small CLI entrypoint.
-- Keep the existing read-only tools.
+- Keep the browser UI and CLI working.
+- Keep the existing read-only tools, including git_status.
 - Keep human approval before writes.
 - Never execute model-suggested arbitrary commands.
 - Reuse the existing runner, run store, patch, and validation modules.
-- Add a macOS-first terminal command that can run one goal and print a compact trace.
-- Add a simple TUI-like output layout before introducing a full terminal UI framework.
+- Add streaming or incremental terminal feedback without exposing hidden reasoning.
+- Explore terminal-side patch approval while keeping path/action validation.
+- Keep validation commands whitelist-only.
 - Do not store API keys or full hidden reasoning.
 - Update README through npm run readme:generate.
 - Run npm run docs:generate so the versioned architecture SVG is updated.

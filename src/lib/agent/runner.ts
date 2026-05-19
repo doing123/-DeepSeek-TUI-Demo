@@ -241,25 +241,27 @@ function completeLatestStep(steps: AgentStep[], detail?: string, extra: Partial<
 
 function buildOfflineAnswer(fileCount: number): AgentAnswer {
   return {
-    title: "补丁预览通道已就绪",
+    title: "终端入口和补丁预览通道已就绪",
     summary:
-      "当前运行在离线模式。V0.3 已经具备只读工具循环、结构化补丁提案和人工确认后的安全应用入口；配置 DEEPSEEK_API_KEY 后模型可以基于仓库上下文提出可预览补丁。",
+      "当前运行在离线模式。V0.6 已经具备只读工具循环、结构化补丁提案、人工确认后的安全应用入口、运行历史和终端 CLI；配置 DEEPSEEK_API_KEY 后模型可以基于仓库上下文提出可预览补丁。",
     plan: [
       "把 Web UI 作为任务入口，收集用户的编码目标。",
       `服务端先索引当前工作区的 ${fileCount} 个文本文件。`,
       "模型通过严格 JSON 请求只读工具，服务端执行后把结果回填。",
       "模型在信息足够时输出结构化 final answer，可附带 patchProposal。",
-      "用户在 UI 中审查 patchProposal 后，点击确认才会写入文件。"
+      "用户在 UI 中审查 patchProposal 后，点击确认才会写入文件。",
+      "也可以通过 npm run agent -- \"目标\" 在终端里运行同一套 agent 内核。"
     ],
     filesToInspect: [
       "src/app/api/agent/route.ts",
       "src/lib/agent/runner.ts",
       "src/lib/agent/tools.ts",
       "src/lib/agent/deepseek.ts",
-      "src/lib/agent/workspace.ts"
+      "src/lib/agent/workspace.ts",
+      "src/cli/agent.ts"
     ],
     proposedChanges: [
-      "V0.4 可以加入终端命令白名单，用于运行 typecheck/test/build。"
+      "V0.7 可以加入 CLI 补丁审批、流式输出和更完整的会话恢复。"
     ],
     risks: [
       "当前版本只读仓库，不会自动修改文件。",
@@ -269,7 +271,7 @@ function buildOfflineAnswer(fileCount: number): AgentAnswer {
     nextActions: [
       "复制 .env.example 为 .env.local 并填写 DEEPSEEK_API_KEY。",
       "运行 npm run dev 后在浏览器中测试任务输入。",
-      "实现 V0.4 的命令白名单和验证回填。"
+      "运行 npm run agent -- \"查看当前仓库状态\" 测试终端入口。"
     ]
   };
 }
