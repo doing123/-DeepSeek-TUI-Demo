@@ -112,6 +112,32 @@ button {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+.resume-banner {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 13px;
+}
+
+.resume-banner span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resume-banner .secondary {
+  min-height: 30px;
+  padding: 0 10px;
+}
+
 .actions {
   display: flex;
   gap: 10px;
@@ -183,33 +209,72 @@ button {
 .recent-runs__list {
   display: grid;
   gap: 8px;
-  max-height: 260px;
+  max-height: 340px;
   overflow: auto;
+  padding-right: 4px;
 }
 
 .recent-run {
   display: grid;
-  gap: 4px;
-  min-height: 58px;
-  padding: 10px 11px;
-  text-align: left;
+  grid-template-columns: minmax(0, 1fr) 70px;
+  gap: 10px;
+  align-items: center;
+  min-height: 92px;
+  padding: 12px;
   color: var(--ink);
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
+}
+
+.recent-run__main {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+  padding: 0;
+  text-align: left;
+  color: inherit;
+  background: transparent;
   cursor: pointer;
 }
 
-.recent-run strong,
-.recent-run span,
-.recent-run small {
+.recent-run__continue {
+  justify-self: end;
+  width: 64px;
+  min-height: 38px;
+  padding: 0;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.recent-run__main strong {
+  display: block;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 16px;
+  line-height: 1.25;
 }
 
-.recent-run span,
-.recent-run small {
+.recent-run__main span,
+.recent-run__main small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.35;
+}
+
+.recent-run__main span,
+.recent-run__main small {
   color: var(--muted);
   font-size: 13px;
 }
@@ -493,6 +558,11 @@ button {
   }
 
   .actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .resume-banner {
     align-items: stretch;
     flex-direction: column;
   }

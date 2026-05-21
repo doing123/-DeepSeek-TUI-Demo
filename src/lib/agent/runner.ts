@@ -25,6 +25,8 @@ import { listWorkspaceFiles } from "./workspace";
 
 type RunCodingAgentInput = {
   goal: string;
+  promptGoal?: string;
+  resumeFromRunId?: string;
   workspaceRoot: string;
   onEvent?: (event: AgentRunEvent) => void;
 };
@@ -33,15 +35,31 @@ const MAX_TOOL_CALLS = 6;
 
 export async function runCodingAgent({
   goal,
+  promptGoal,
+  resumeFromRunId,
   workspaceRoot,
   onEvent
 }: RunCodingAgentInput): Promise<AgentRunResult> {
   const startedAt = new Date().toISOString();
   const steps: AgentStep[] = [];
   const config = getDeepSeekConfig();
+  const modelGoal = promptGoal ?? goal;
 
   pushStep(steps, "理解目标", `收到任务：${goal}`, { kind: "system" }, onEvent);
   completeLatestStep(steps, undefined, {}, onEvent);
+
+  if (resumeFromRunId) {
+    pushStep(
+      steps,
+      "恢复上下文",
+      `续接本地运行记录：${resumeFromRunId}`,
+      {
+        kind: "system"
+      },
+      onEvent
+    );
+    completeLatestStep(steps, undefined, {}, onEvent);
+  }
 
   pushStep(
     steps,
@@ -75,6 +93,7 @@ export async function runCodingAgent({
     return {
       id: randomUUID(),
       goal,
+      resumeFromRunId,
       mode: "offline",
       model: config.model,
       startedAt,
@@ -90,7 +109,7 @@ export async function runCodingAgent({
   }
 
   const messages = buildCodingAgentMessages(
-    goal,
+    modelGoal,
     snapshot,
     READ_ONLY_TOOL_DEFINITIONS,
     MAX_TOOL_CALLS
@@ -122,6 +141,7 @@ export async function runCodingAgent({
     if (parsed.type === "final") {
       return buildRunResult({
         goal,
+        resumeFromRunId,
         model,
         startedAt,
         steps,
@@ -135,6 +155,7 @@ export async function runCodingAgent({
     if (parsed.type === "invalid") {
       return buildRunResult({
         goal,
+        resumeFromRunId,
         model,
         startedAt,
         steps,
@@ -148,6 +169,7 @@ export async function runCodingAgent({
     if (toolCallCount >= MAX_TOOL_CALLS) {
       return buildRunResult({
         goal,
+        resumeFromRunId,
         model,
         startedAt,
         steps,
@@ -187,6 +209,7 @@ export async function runCodingAgent({
 
   return buildRunResult({
     goal,
+    resumeFromRunId,
     model,
     startedAt,
     steps,
@@ -199,6 +222,7 @@ export async function runCodingAgent({
 
 function buildRunResult({
   goal,
+  resumeFromRunId,
   model,
   startedAt,
   steps,
@@ -208,6 +232,7 @@ function buildRunResult({
   rawText
 }: {
   goal: string;
+  resumeFromRunId?: string;
   model: string;
   startedAt: string;
   steps: AgentStep[];
@@ -219,6 +244,7 @@ function buildRunResult({
   return {
     id: randomUUID(),
     goal,
+    resumeFromRunId,
     mode: "deepseek",
     model,
     startedAt,
@@ -275,9 +301,9 @@ function completeLatestStep(
 
 function buildOfflineAnswer(fileCount: number): AgentAnswer {
   return {
-    title: "终端审批和补丁预览通道已就绪",
+    title: "多轮恢复上下文通道已就绪",
     summary:
-      "当前运行在离线模式。V0.7 已经具备只读工具循环、结构化补丁提案、人工确认后的安全应用入口、运行历史、终端 CLI、流式步骤反馈和终端侧补丁审批；配置 DEEPSEEK_API_KEY 后模型可以基于仓库上下文提出可预览补丁。",
+      "当前运行在离线模式。V0.8 已经具备只读工具循环、结构化补丁提案、人工确认后的安全应用入口、运行历史、终端 CLI、流式步骤反馈、终端侧补丁审批和基于本地 run history 的续接能力；配置 DEEPSEEK_API_KEY 后模型可以基于仓库上下文提出可预览补丁。",
     plan: [
       "把 Web UI 作为任务入口，收集用户的编码目标。",
       `服务端先索引当前工作区的 ${fileCount} 个文本文件。`,
@@ -285,7 +311,8 @@ function buildOfflineAnswer(fileCount: number): AgentAnswer {
       "模型在信息足够时输出结构化 final answer，可附带 patchProposal。",
       "用户在 UI 中审查 patchProposal 后，点击确认才会写入文件。",
       "也可以通过 npm run agent -- \"目标\" 在终端里运行同一套 agent 内核。",
-      "终端可通过 --stream 查看高层步骤事件，通过 --apply 审批补丁，通过 --validate 运行白名单验证。"
+      "终端可通过 --stream 查看高层步骤事件，通过 --apply 审批补丁，通过 --validate 运行白名单验证。",
+      "CLI 和 Web 都可以选择历史 run，把上一轮摘要、计划、风险、补丁元信息和验证结果作为本轮上下文。"
     ],
     filesToInspect: [
       "src/app/api/agent/route.ts",
@@ -295,10 +322,11 @@ function buildOfflineAnswer(fileCount: number): AgentAnswer {
       "src/lib/agent/workspace.ts",
       "src/cli/agent.ts",
       "src/lib/agent/patches.ts",
-      "src/lib/agent/validation.ts"
+      "src/lib/agent/validation.ts",
+      "src/lib/agent/resume.ts"
     ],
     proposedChanges: [
-      "V0.8 可以加入更完整的多轮会话恢复和 CLI/Web 会话互通。"
+      "V0.9 可以把模型输出升级为真正的 token streaming，并为后续全屏 TUI 做事件流适配。"
     ],
     risks: [
       "当前版本只读仓库，不会自动修改文件。",
@@ -309,6 +337,7 @@ function buildOfflineAnswer(fileCount: number): AgentAnswer {
       "复制 .env.example 为 .env.local 并填写 DEEPSEEK_API_KEY。",
       "运行 npm run dev 后在浏览器中测试任务输入。",
       "运行 npm run agent -- --stream \"查看当前仓库状态\" 测试流式步骤。",
+      "运行 npm run agent -- --continue <run-id> \"继续上一轮任务\" 测试恢复上下文。",
       "运行 npm run agent -- --validate typecheck \"检查当前实现\" 测试终端验证。"
     ]
   };

@@ -96,6 +96,7 @@ function toStoredRunResult(result: AgentRunResult): StoredAgentRunResult {
   return {
     id: result.id,
     goal: result.goal,
+    resumeFromRunId: result.resumeFromRunId,
     mode: result.mode,
     model: result.model,
     startedAt: result.startedAt,
@@ -129,6 +130,7 @@ function toSummary(record: AgentRunRecord): AgentRunSummary {
   return {
     id: record.id,
     goal: record.result.goal,
+    resumeFromRunId: record.result.resumeFromRunId,
     title: record.result.answer.title,
     mode: record.result.mode,
     model: record.result.model,

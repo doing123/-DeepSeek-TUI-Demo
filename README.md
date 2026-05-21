@@ -22,11 +22,11 @@ Open http://localhost:3000 and run a goal from the workbench.
 
 ## Architecture
 
-![Architecture v0.7.0](docs/architecture/architecture-v0.7.0.svg)
+![Architecture v0.8.0](docs/architecture/architecture-v0.8.0.svg)
 
-- **Next.js App**: 负责输入任务、展示 agent trace、展示结构化建议。
-- **CLI Shell**: 通过 npm run agent 直接复用 agent runner，提供终端入口、trace 输出和运行历史回看。
-- **API Route**: 运行在 Node.js 服务端，读取环境变量和本地仓库。
+- **Next.js App**: 负责输入任务、展示 agent trace、展示结构化建议和续接历史运行。
+- **CLI Shell**: 通过 npm run agent 直接复用 agent runner，提供终端入口、trace 输出、运行历史回看和续接。
+- **API Route**: 运行在 Node.js 服务端，读取环境变量、本地仓库和可选 resumeRunId。
 - **Agent Runner**: 组织任务理解、仓库扫描、LLM 调用、结果解析。
 - **DeepSeek Provider**: 封装 OpenAI-compatible chat completions 请求，默认使用 DeepSeek。
 - **Workspace Tools**: 当前支持安全只读扫描、文件读取、文本搜索和 Git 状态读取，后续扩展 write_patch、run_command。
@@ -44,7 +44,9 @@ Architecture snapshots are stored in `docs/architecture/` for version-to-version
 - CLI 运行历史：终端支持 --recent 和 --show 回看 .agent-runs 中的历史记录。
 - 终端补丁审批：npm run agent -- --apply 会要求用户确认后复用安全 patch apply 模块写入文件。
 - 验证命令串联：npm run agent -- --validate typecheck|build|all 可在终端运行白名单验证命令。
+- CLI 恢复上下文：npm run agent -- --continue <run-id> 可把历史 run 压缩成本轮上下文。
 - 服务端 API：POST /api/agent。
+- API 续接参数：POST /api/agent 支持 resumeRunId，并保存 resumeFromRunId。
 - DeepSeek provider：读取 DEEPSEEK_API_KEY、DEEPSEEK_BASE_URL、DEEPSEEK_MODEL。
 - 离线模式：没有 API key 时仍能返回本地规划结果。
 - 工作区索引：忽略 .git、node_modules、.next 和真实 .env 文件，只暴露文本文件路径。
@@ -56,6 +58,7 @@ Architecture snapshots are stored in `docs/architecture/` for version-to-version
 - 验证命令：UI 可触发 npm run typecheck 和 npm run build，服务端只执行白名单命令。
 - DeepSeek 实战参数：默认启用 response_format=json_object，显式控制 thinking，并配置 max_tokens。
 - 运行记录：每次 agent run 会保存到本地 .agent-runs，并可在 UI 中回看最近运行。
+- Web 续接入口：最近运行列表可点击继续，把上一轮摘要、计划、风险、补丁元信息和验证结果带入新任务。
 - 验证关联：验证命令可关联当前 runId，结果会追加到本地运行记录。
 - Node.js 22 环境声明：仓库包含 .nvmrc 和 package.json engines。
 - 服务端调试入口：VS Code 可附着到 Next.js 16 inspector，并通过浏览器请求命中受控 debug probe。
@@ -97,6 +100,7 @@ Sources:
 - V0.6 的 Git 工具保持只读和固定命令列表，先让模型理解工作区状态，暂不允许模型执行任意 shell。
 - V0.7 把 runner 的高层步骤事件暴露给 CLI，用可解释的阶段进度代替隐藏推理流。
 - V0.7 允许终端侧应用 patchProposal，但仍复用服务端同一套路径校验和 create/replace action 限制。
+- V0.8 用本地 run history 生成续接提示，只携带用户可见的摘要、计划、风险、补丁元信息和验证结果。
 
 ## Development Context
 
@@ -104,7 +108,7 @@ Sources:
 - `CHANGELOG.md`: 按版本记录功能、限制和重要取舍。
 - `docs/architecture/`: 按版本保存架构图 SVG，方便横向对比系统演进。
 - `docs/DEBUGGING.md`: 服务端调试步骤，记录如何让浏览器请求触发 Next API 断点。
-- `docs/CLI.md`: 终端入口使用说明，记录 V0.6 CLI 的命令、能力和限制。
+- `docs/CLI.md`: 终端入口使用说明，记录 CLI 命令、续接能力和限制。
 
 ## Roadmap
 
@@ -156,14 +160,20 @@ Sources:
 - CLI 流式 trace
 - 终端补丁审批
 - 验证命令串联
-- 更完整的会话恢复
 
 ### V0.8 · 多轮会话恢复
 
-- 完整 transcript 存储
-- 继续上次 run
+- CLI --continue <run-id>
+- Web 最近运行继续入口
+- POST /api/agent resumeRunId
+- 恢复上下文压缩与 resumeFromRunId 存储
+
+### V0.9 · 真实流式输出与 TUI 事件流
+
+- Provider token streaming
+- Web/CLI incremental answer events
+- TUI renderer spike
 - 更细的 token/context 预算
-- CLI 与 Web 会话互通
 
 ## Scripts
 

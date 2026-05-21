@@ -26,6 +26,7 @@ export function AgentWorkbench() {
   const [goal, setGoal] = useState(defaultGoal);
   const [result, setResult] = useState<AgentRunResult | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<AgentRunRecord | null>(null);
+  const [resumeRun, setResumeRun] = useState<AgentRunSummary | null>(null);
   const [recentRuns, setRecentRuns] = useState<AgentRunSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -56,6 +57,14 @@ export function AgentWorkbench() {
 
     setSelectedRecord(record);
     setResult(record.result);
+    setResumeRun(null);
+    setError(null);
+  }
+
+  function continueRun(run: AgentRunSummary) {
+    setResumeRun(run);
+    setGoal(`继续上一轮任务：${run.goal}\n\n本轮目标：`);
+    setSelectedRecord(null);
     setError(null);
   }
 
@@ -84,7 +93,10 @@ export function AgentWorkbench() {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ goal })
+        body: JSON.stringify({
+          goal,
+          ...(resumeRun ? { resumeRunId: resumeRun.id } : {})
+        })
       });
 
       const payload = (await response.json()) as AgentRunResult | { error?: string };
@@ -94,6 +106,7 @@ export function AgentWorkbench() {
       }
 
       setResult(payload as AgentRunResult);
+      setResumeRun(null);
       await loadRecentRuns();
     } catch (runError) {
       setError(runError instanceof Error ? runError.message : "Agent run failed");
@@ -119,12 +132,27 @@ export function AgentWorkbench() {
             onChange={(event) => setGoal(event.target.value)}
             placeholder="描述你希望 agent 处理的编码任务"
           />
+          {resumeRun ? (
+            <div className="resume-banner">
+              <span>续接：{resumeRun.title}</span>
+              <button className="secondary" type="button" onClick={() => setResumeRun(null)}>
+                清除
+              </button>
+            </div>
+          ) : null}
 
           <div className="actions">
             <button className="primary" type="submit" disabled={!canRun}>
               {isRunning ? "运行中" : "运行 Agent"}
             </button>
-            <button className="secondary" type="button" onClick={() => setGoal(defaultGoal)}>
+            <button
+              className="secondary"
+              type="button"
+              onClick={() => {
+                setGoal(defaultGoal);
+                setResumeRun(null);
+              }}
+            >
               重置
             </button>
           </div>
@@ -137,14 +165,21 @@ export function AgentWorkbench() {
               className="preset"
               type="button"
               key={starterGoal}
-              onClick={() => setGoal(starterGoal)}
+              onClick={() => {
+                setGoal(starterGoal);
+                setResumeRun(null);
+              }}
             >
               {starterGoal}
             </button>
           ))}
         </section>
 
-        <RecentRunsPanel runs={recentRuns} onSelectRun={loadRunRecord} />
+        <RecentRunsPanel
+          runs={recentRuns}
+          onSelectRun={loadRunRecord}
+          onContinueRun={continueRun}
+        />
 
         <div className="status">
           DeepSeek key 通过 <code>DEEPSEEK_API_KEY</code> 读取；没有 key 时会返回本地离线结果。
@@ -170,10 +205,12 @@ export function AgentWorkbench() {
 
 function RecentRunsPanel({
   runs,
-  onSelectRun
+  onSelectRun,
+  onContinueRun
 }: {
   runs: AgentRunSummary[];
   onSelectRun: (runId: string) => Promise<void>;
+  onContinueRun: (run: AgentRunSummary) => void;
 }) {
   return (
     <section className="recent-runs" aria-label="最近运行">
@@ -183,18 +220,26 @@ function RecentRunsPanel({
       ) : (
         <div className="recent-runs__list">
           {runs.map((run) => (
-            <button
-              className="recent-run"
-              type="button"
-              key={run.id}
-              onClick={() => void onSelectRun(run.id)}
-            >
-              <strong>{run.title}</strong>
-              <span>{run.goal}</span>
-              <small>
-                {run.mode} · {run.toolCallCount} tools · {run.validationCount} checks
-              </small>
-            </button>
+            <article className="recent-run" key={run.id}>
+              <button
+                className="recent-run__main"
+                type="button"
+                onClick={() => void onSelectRun(run.id)}
+              >
+                <strong>{run.title}</strong>
+                <span>{run.goal}</span>
+                <small>
+                  {run.mode} · {run.toolCallCount} tools · {run.validationCount} checks
+                </small>
+              </button>
+              <button
+                className="recent-run__continue"
+                type="button"
+                onClick={() => onContinueRun(run)}
+              >
+                继续
+              </button>
+            </article>
           ))}
         </div>
       )}
@@ -218,6 +263,9 @@ function AgentResultView({
               {result.mode}
             </span>
             <span className="tag tag--neutral">{result.model}</span>
+            {result.resumeFromRunId ? (
+              <span className="tag tag--neutral">continued</span>
+            ) : null}
             <span className="tag tag--neutral">{result.workspace.fileCount} files</span>
             <span className="tag tag--neutral">{result.toolCallCount} tools</span>
           </div>

@@ -62,9 +62,9 @@ Observed ideas to learn from:
 
 ## Current State
 
-Version: V0.7
+Version: V0.8
 
-The current implementation is a Node.js 22 + Next.js 16 learning workbench plus a small CLI shell. It has read-only tools, human-approved patch application, whitelist validation commands, local run history, high-level runner events, and a terminal entrypoint, not a full-screen TUI yet.
+The current implementation is a Node.js 22 + Next.js 16 learning workbench plus a small CLI shell. It has read-only tools, human-approved patch application, whitelist validation commands, local run history, high-level runner events, terminal approval flow, and a simple resume mechanism, not a full-screen TUI yet.
 
 Implemented:
 
@@ -83,6 +83,7 @@ Implemented:
 - CLI patch application through `--apply`, reusing the same safe full-file patch module as the browser API.
 - CLI validation chaining through `--validate typecheck|build|all`, reusing the fixed validation command whitelist.
 - The `tsx` Node loader is used so the CLI can run TypeScript modules directly in development.
+- CLI resume through `--continue <run-id>`, using saved runs as compact next-turn context.
 - Structured `patchProposal` final answer format.
 - UI patch preview with explicit confirmation before writes.
 - Server-side patch apply API with workspace path validation.
@@ -91,6 +92,9 @@ Implemented:
 - DeepSeek request options aligned with JSON Output and thinking-mode parameter rules.
 - Local `.agent-runs` store for lightweight run records.
 - Recent-runs UI for inspecting previous agent results.
+- Recent-runs UI can start a continuation from a saved run.
+- `POST /api/agent` accepts `resumeRunId` and records `resumeFromRunId`.
+- `src/lib/agent/resume.ts` compresses visible run output, patch metadata, and validation history into a resume prompt.
 - Validation results can be linked to a saved run by `runId`.
 - VS Code can start a Next inspector session with guarded debug probes for browser-triggered `/api/agent` requests.
 - `npm run debug:check` can verify that `/api/agent` pauses through the inspector without calling DeepSeek.
@@ -109,8 +113,9 @@ Important files:
 - `src/lib/agent/git-tools.ts`
 - `src/cli/agent.ts`
 - `src/lib/agent/patches.ts`
-- `src/lib/agent/validation.ts`
 - `src/lib/agent/run-store.ts`
+- `src/lib/agent/resume.ts`
+- `src/lib/agent/validation.ts`
 - `src/app/api/patch/apply/route.ts`
 - `src/app/api/validate/route.ts`
 - `src/app/api/runs/route.ts`
@@ -142,7 +147,7 @@ UI / CLI
   -> Generated docs + architecture snapshot
 ```
 
-The V0.7 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 validation, V0.5 run history, V0.6 terminal shell, and adds streaming/approval affordances to the CLI:
+The V0.8 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 validation, V0.5 run history, V0.6 terminal shell, V0.7 CLI streaming/approval, and adds cross-surface continuation:
 
 1. User submits a goal.
 2. Agent creates a turn state.
@@ -160,6 +165,9 @@ The V0.7 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 valida
 14. CLI can print high-level step events as they happen.
 15. CLI can ask for explicit approval before applying patch proposals.
 16. CLI can run fixed validation commands after an agent run or patch application.
+17. UI or CLI can select a saved run to continue.
+18. Resume context is rebuilt from user-visible summaries, patch metadata, and validation records.
+19. The new run preserves the user's fresh goal and stores `resumeFromRunId` for traceability.
 
 Debugging uses the official Next.js 16 `next dev --inspect` path. Start `npm run dev:inspect:break`, attach VS Code with `Attach Next.js Server (9229)`, and run `npm run debug:check` to verify that the guarded `debugger` statement in `src/app/api/agent/route.ts` is reachable before testing normal source breakpoints.
 
@@ -256,9 +264,8 @@ Built:
 Do not build yet:
 
 - full-screen terminal UI framework
-- terminal patch apply flow
 - model-suggested arbitrary shell execution
-- long-lived multi-turn session resume
+- token-level provider streaming
 
 ## V0.7 Completed
 
@@ -277,8 +284,26 @@ Do not build yet:
 
 - arbitrary shell execution from model output
 - full transcript replay
-- true multi-turn resume
-- full-screen TUI layout engine
+- true token-level provider streaming
+
+## V0.8 Completed
+
+Theme: multi-turn resume across CLI and Web.
+
+Built:
+
+- `src/lib/agent/resume.ts` for compact saved-run handoff prompts.
+- `resumeFromRunId` on run results, saved records, and recent-run summaries.
+- `npm run agent -- --continue <run-id> "goal"` for CLI continuation.
+- `POST /api/agent` support for `resumeRunId`.
+- Web recent-runs continue action and composer resume banner.
+
+Do not build yet:
+
+- full transcript replay
+- arbitrary shell execution from model output
+- token-level streaming from DeepSeek
+- full-screen TUI renderer
 
 ## Safety Rules
 
@@ -296,7 +321,7 @@ Use this prompt when starting the next version:
 ```txt
 You are continuing DeepSeek TUI Demo.
 
-Goal: implement V0.8, multi-turn session resume for a macOS-first coding-agent learning project built with Next.js and TypeScript.
+Goal: implement V0.9, token streaming and the first TUI event-flow spike for a macOS-first coding-agent learning project built with Next.js and TypeScript.
 
 Read first:
 - docs/DEVELOPMENT_CONTEXT.md
@@ -308,6 +333,7 @@ Read first:
 - src/lib/agent/patches.ts
 - src/lib/agent/validation.ts
 - src/lib/agent/run-store.ts
+- src/lib/agent/resume.ts
 - src/lib/agent/workspace.ts
 - src/cli/agent.ts
 
@@ -316,12 +342,11 @@ Constraints:
 - Keep Node.js 22 as the local runtime.
 - Keep the browser UI and CLI working.
 - Keep the existing read-only tools, including git_status.
+- Keep CLI/Web resume compatible through `resumeFromRunId`.
 - Keep human approval before writes.
 - Never execute model-suggested arbitrary commands.
-- Reuse the existing runner, run store, patch, and validation modules.
-- Store enough structured transcript information to resume a previous task safely.
-- Add `npm run agent -- --continue <run-id>` or an equivalent command.
-- Keep CLI and Web run history compatible.
+- Reuse the existing runner, run store, resume, patch, and validation modules.
+- Add provider-level token streaming or an event adapter that can later feed a real TUI.
 - Keep validation commands whitelist-only.
 - Do not store API keys or full hidden reasoning.
 - Update README through npm run readme:generate.

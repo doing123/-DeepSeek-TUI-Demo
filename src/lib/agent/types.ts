@@ -126,6 +126,7 @@ export type AgentAnswer = {
 export type AgentRunResult = {
   id: string;
   goal: string;
+  resumeFromRunId?: string;
   mode: AgentMode;
   model: string;
   startedAt: string;
@@ -154,6 +155,7 @@ export type AgentRunRecord = {
 export type AgentRunSummary = {
   id: string;
   goal: string;
+  resumeFromRunId?: string;
   title: string;
   mode: AgentMode;
   model: string;

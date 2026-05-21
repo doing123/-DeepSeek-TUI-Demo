@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
+import { buildResumePromptGoal } from "@/lib/agent/resume";
 import { runCodingAgent } from "@/lib/agent/runner";
-import { saveAgentRunRecord } from "@/lib/agent/run-store";
+import {
+  readAgentRunRecord,
+  saveAgentRunRecord
+} from "@/lib/agent/run-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,8 +29,23 @@ export async function POST(request: Request) {
   }
 
   try {
+    const resumeRunId = readOptionalString(payload, "resumeRunId");
+    const resumeRecord = resumeRunId
+      ? await readAgentRunRecord(process.cwd(), resumeRunId)
+      : null;
+
+    if (resumeRunId && !resumeRecord) {
+      return NextResponse.json({ error: "找不到要继续的运行记录。" }, { status: 404 });
+    }
+
+    const promptGoal = resumeRecord
+      ? buildResumePromptGoal(goal, resumeRecord)
+      : goal;
+
     const result = await runCodingAgent({
       goal,
+      promptGoal,
+      resumeFromRunId: resumeRecord?.id,
       workspaceRoot: process.cwd()
     });
 
@@ -44,10 +63,14 @@ export async function POST(request: Request) {
 }
 
 function readGoal(payload: unknown) {
-  if (!payload || typeof payload !== "object" || !("goal" in payload)) {
+  return readOptionalString(payload, "goal");
+}
+
+function readOptionalString(payload: unknown, key: string) {
+  if (!payload || typeof payload !== "object" || !(key in payload)) {
     return null;
   }
 
-  const value = (payload as { goal?: unknown }).goal;
-  return typeof value === "string" ? value.trim() : null;
+  const value = (payload as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }

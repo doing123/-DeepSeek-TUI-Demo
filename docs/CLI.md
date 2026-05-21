@@ -1,8 +1,8 @@
 # CLI
 
-V0.7 keeps the small terminal shell from V0.6 and adds high-level streaming,
-terminal patch approval, and whitelist validation chaining. It is intentionally
-not a full-screen TUI yet.
+V0.8 keeps the small terminal shell and adds saved-run continuation. It is
+intentionally not a full-screen TUI yet, but the command flow now looks closer
+to a practical coding agent loop: run, inspect, continue, approve, validate.
 
 ## Usage
 
@@ -47,6 +47,12 @@ Show one saved run:
 npm run agent -- --show <run-id>
 ```
 
+Continue from one saved run:
+
+```bash
+npm run agent -- --continue <run-id> "继续上一轮任务，先确认当前未提交改动"
+```
+
 Print JSON:
 
 ```bash
@@ -59,6 +65,8 @@ npm run agent -- --json "查看当前仓库有哪些风险"
 - It loads `.env.local` and `.env` before running the agent so DeepSeek config
   works outside Next.js.
 - It saves runs to `.agent-runs` by default, matching the browser workbench.
+- `--continue <run-id>` reads a saved run and passes a compact summary of its
+  visible result, patch metadata, and validation history into the next prompt.
 - Patch proposals can be applied from the terminal with `--apply`, but only after
   explicit user approval. The CLI reuses the same path and action validation as
   the browser patch API.

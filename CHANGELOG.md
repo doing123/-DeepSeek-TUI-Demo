@@ -6,7 +6,23 @@ All notable project changes are tracked here.
 
 ### Notes
 
-- Next planned focus: multi-turn session resume and shared context between CLI and Web.
+- Next planned focus: token streaming and a first full-screen TUI renderer spike.
+
+## 0.8.0 - 2026-05-21
+
+### Added
+
+- Added `resumeFromRunId` to agent run results and saved run summaries.
+- Added a compact resume prompt builder that turns a saved run into next-turn context.
+- Added `npm run agent -- --continue <run-id>` for CLI-side run continuation.
+- Added `resumeRunId` support to `POST /api/agent`.
+- Added a Web workbench continue action in the recent-runs panel.
+
+### Changed
+
+- Preserved the user's new goal separately from the expanded model prompt when resuming.
+- Updated offline guidance, CLI docs, project plan, and architecture snapshots for V0.8.
+- Bumped project version to `0.8.0`.
 
 ## 0.7.0 - 2026-05-19
 

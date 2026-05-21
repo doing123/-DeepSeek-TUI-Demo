@@ -2,6 +2,7 @@ import { readFile } from "fs/promises";
 import path from "path";
 import { createInterface } from "readline/promises";
 import { pathToFileURL } from "url";
+import { buildResumePromptGoal, formatResumeTitle } from "../lib/agent/resume";
 import type {
   AgentRunEvent,
   AgentRunRecord,
@@ -21,6 +22,7 @@ type CliOptions = {
   noSave: boolean;
   recent: boolean;
   recentLimit: number;
+  continueRunId?: string;
   showRunId?: string;
   stream: boolean;
   trace: boolean;
@@ -69,14 +71,27 @@ async function main() {
     throw new Error("Please provide a goal, or pass --help for usage.");
   }
 
-  const [{ runCodingAgent }, { saveAgentRunRecord, appendValidationToRun }] = await Promise.all([
-    import("../lib/agent/runner"),
-    import("../lib/agent/run-store")
-  ]);
+  const [
+    { runCodingAgent },
+    { saveAgentRunRecord, appendValidationToRun, readAgentRunRecord }
+  ] = await Promise.all([import("../lib/agent/runner"), import("../lib/agent/run-store")]);
+  const resumeRecord = options.continueRunId
+    ? await readAgentRunRecord(workspaceRoot, options.continueRunId)
+    : null;
 
-  printHeader(options.goal, workspaceRoot, options);
+  if (options.continueRunId && !resumeRecord) {
+    throw new Error(`Run not found for --continue: ${options.continueRunId}`);
+  }
+
+  const promptGoal = resumeRecord
+    ? buildResumePromptGoal(options.goal, resumeRecord)
+    : options.goal;
+
+  printHeader(options.goal, workspaceRoot, options, resumeRecord ?? undefined);
   const result = await runCodingAgent({
     goal: options.goal,
+    promptGoal,
+    resumeFromRunId: resumeRecord?.id,
     workspaceRoot,
     onEvent: options.stream && !options.json ? printRunEvent : undefined
   });
@@ -184,6 +199,12 @@ async function parseArgs(args: string[]): Promise<CliOptions> {
 
     if (arg === "--show") {
       options.showRunId = readRequiredArg(args[index + 1], "--show");
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--continue") {
+      options.continueRunId = readRequiredArg(args[index + 1], "--continue");
       index += 1;
       continue;
     }
@@ -321,7 +342,12 @@ async function runRequestedValidations(workspaceRoot: string, options: CliOption
   return results;
 }
 
-function printHeader(goal: string, workspaceRoot: string, options: CliOptions) {
+function printHeader(
+  goal: string,
+  workspaceRoot: string,
+  options: CliOptions,
+  resumeRecord?: AgentRunRecord
+) {
   if (options.json) {
     return;
   }
@@ -329,6 +355,9 @@ function printHeader(goal: string, workspaceRoot: string, options: CliOptions) {
   console.log("DeepSeek TUI Demo CLI");
   console.log(`Workspace: ${workspaceRoot}`);
   console.log(`Goal: ${goal}`);
+  if (resumeRecord) {
+    console.log(`Continue: ${formatResumeTitle(resumeRecord)}`);
+  }
   console.log("");
 }
 
@@ -388,6 +417,9 @@ function printAgentResult(result: AgentRunResult | StoredAgentRunResult, options
   console.log(`${result.answer.summary}`);
   console.log("");
   console.log(`Run: ${result.id}`);
+  if (result.resumeFromRunId) {
+    console.log(`Continued from: ${result.resumeFromRunId}`);
+  }
   console.log(`Mode: ${result.mode}`);
   console.log(`Model: ${result.model}`);
   console.log(`Workspace files indexed: ${result.workspace.fileCount}`);
@@ -449,7 +481,12 @@ function printRecentRuns(summaries: AgentRunSummary[], options: CliOptions) {
   for (const item of summaries) {
     console.log(`- ${item.id}`);
     console.log(`  ${item.title}`);
-    console.log(`  ${item.mode} / ${item.model} / tools=${item.toolCallCount} / patches=${item.patchFileCount}`);
+    console.log(
+      `  ${item.mode} / ${item.model} / tools=${item.toolCallCount} / patches=${item.patchFileCount}`
+    );
+    if (item.resumeFromRunId) {
+      console.log(`  continued-from=${item.resumeFromRunId}`);
+    }
     console.log(`  ${item.goal}`);
   }
 }
@@ -515,6 +552,7 @@ Usage:
   npm run agent -- --trace "inspect the validation flow"
   npm run agent -- --recent
   npm run agent -- --show <run-id>
+  npm run agent -- --continue <run-id> "continue the previous task"
 
 Options:
   --cwd <path>     Workspace root. Defaults to the current directory.
@@ -528,6 +566,7 @@ Options:
   --recent         List recent saved runs.
   --limit <n>      Limit --recent output. Defaults to 10.
   --show <run-id>  Show one saved run.
+  --continue <id>  Continue from a saved run and use it as context.
   -h, --help       Show this help.
 `);
 }
