@@ -62,9 +62,9 @@ Observed ideas to learn from:
 
 ## Current State
 
-Version: V0.9
+Version: V0.10
 
-The current implementation is a Node.js 22 + Next.js 16 learning workbench plus a small CLI shell. It has read-only tools, human-approved patch application, whitelist validation commands, local run history, Agent Event Bus, DeepSeek token streaming, terminal approval flow, and a simple resume mechanism, not a full-screen TUI yet.
+The current implementation is a Node.js 22 + Next.js 16 learning workbench plus a CLI and a dependency-free TUI spike. It has read-only tools, human-approved patch application, whitelist validation commands, local run history, Agent Event Bus, DeepSeek token streaming, terminal approval flow, and simple resume.
 
 Implemented:
 
@@ -79,7 +79,10 @@ Implemented:
 - Tool-call limit to avoid runaway loops.
 - UI trace entries for tool input and output summaries.
 - CLI entrypoint at `src/cli/agent.ts`, runnable with `npm run agent`.
+- TUI entrypoint at `src/cli/tui.ts`, runnable with `npm run tui`.
 - CLI output for answer, plan, files, patch proposal summary, optional trace, recent runs, and saved run detail.
+- TUI alternate-screen renderer with goal display, recent-run selection, live events, model stream preview, and result summary.
+- TUI keyboard controls for run, edit goal, select recent run, continue selected run, apply latest patch proposal, and quit.
 - CLI streaming mode through `--stream`, fed by high-level `AgentRunEvent` callbacks from the runner.
 - CLI `--stream` enables DeepSeek token streaming when the API key is configured.
 - CLI patch application through `--apply`, reusing the same safe full-file patch module as the browser API.
@@ -117,6 +120,7 @@ Important files:
 - `src/lib/agent/tools.ts`
 - `src/lib/agent/git-tools.ts`
 - `src/cli/agent.ts`
+- `src/cli/tui.ts`
 - `src/lib/agent/patches.ts`
 - `src/lib/agent/run-store.ts`
 - `src/lib/agent/resume.ts`
@@ -134,6 +138,7 @@ Important files:
 - `.vscode/launch.json`
 - `docs/DEBUGGING.md`
 - `docs/CLI.md`
+- `docs/TUI.md`
 
 ## Architecture Direction
 
@@ -152,7 +157,7 @@ UI / CLI
   -> Generated docs + architecture snapshot
 ```
 
-The V0.9 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 validation, V0.5 run history, V0.6 terminal shell, V0.7 CLI streaming/approval, V0.8 cross-surface continuation, and adds a shared event stream:
+The V0.10 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 validation, V0.5 run history, V0.6 terminal shell, V0.7 CLI streaming/approval, V0.8 cross-surface continuation, V0.9 shared event stream, and adds a first full-screen terminal renderer:
 
 1. User submits a goal.
 2. Agent creates a turn state.
@@ -176,6 +181,8 @@ The V0.9 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 valida
 20. Runner emits typed events for run lifecycle, steps, model stream chunks, tool calls, and completion.
 21. DeepSeek provider can stream token chunks and still return accumulated final content for JSON parsing.
 22. Web uses SSE to render live events; CLI uses the same events through the direct runner callback.
+23. TUI uses the same direct runner callback to render events in an alternate-screen terminal layout.
+24. TUI can continue from a selected saved run and apply a returned patch proposal through the existing safe patch module.
 
 Debugging uses the official Next.js 16 `next dev --inspect` path. Start `npm run dev:inspect:break`, attach VS Code with `Attach Next.js Server (9229)`, and run `npm run debug:check` to verify that the guarded `debugger` statement in `src/app/api/agent/route.ts` is reachable before testing normal source breakpoints.
 
@@ -326,7 +333,25 @@ Built:
 
 Do not build yet:
 
-- full-screen TUI renderer
+- arbitrary shell execution from model output
+- context budget controls
+- full transcript replay
+
+## V0.10 Completed
+
+Theme: first full-screen TUI renderer spike.
+
+Built:
+
+- `npm run tui` entrypoint.
+- Dependency-free ANSI alternate-screen TUI renderer.
+- Keyboard controls for running a goal, editing the goal, selecting recent runs, continuing a selected run, applying a patch proposal, and quitting.
+- Live event panel and model stream preview fed by the V0.9 Agent Event Bus.
+- `--once` mode for non-interactive smoke tests.
+
+Do not build yet:
+
+- rich terminal component framework
 - arbitrary shell execution from model output
 - context budget controls
 - full transcript replay
@@ -347,7 +372,7 @@ Use this prompt when starting the next version:
 ```txt
 You are continuing DeepSeek TUI Demo.
 
-Goal: implement V0.10, a first full-screen TUI renderer spike for a macOS-first coding-agent learning project built with Next.js and TypeScript.
+Goal: implement V0.11, context-budget controls and stronger tool registry boundaries for a macOS-first coding-agent learning project built with Next.js and TypeScript.
 
 Read first:
 - docs/DEVELOPMENT_CONTEXT.md
@@ -363,6 +388,7 @@ Read first:
 - src/app/api/agent/stream/route.ts
 - src/lib/agent/workspace.ts
 - src/cli/agent.ts
+- src/cli/tui.ts
 
 Constraints:
 - Keep DeepSeek as the first provider.
@@ -370,11 +396,12 @@ Constraints:
 - Keep the browser UI and CLI working.
 - Keep the existing read-only tools, including git_status.
 - Keep CLI/Web resume compatible through `resumeFromRunId`.
-- Reuse the V0.9 Agent Event Bus instead of inventing a separate TUI protocol.
+- Keep the V0.10 TUI working.
 - Keep human approval before writes.
 - Never execute model-suggested arbitrary commands.
 - Reuse the existing runner, run store, resume, patch, and validation modules.
-- Build only the smallest useful TUI surface: run input, live events, recent run selection, and safe patch/validation affordances.
+- Add explicit context-budget controls before adding more tools.
+- Make tool registration and approval boundaries easier to inspect.
 - Keep validation commands whitelist-only.
 - Do not store API keys or full hidden reasoning.
 - Update README through npm run readme:generate.

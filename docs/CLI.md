@@ -5,6 +5,9 @@ the shared Agent Event Bus. It is intentionally not a full-screen TUI yet, but
 the command flow now looks closer to a practical coding agent loop: run, stream,
 inspect, continue, approve, validate.
 
+V0.10 adds `npm run tui` for the first full-screen terminal interface. See
+`docs/TUI.md` for the interactive keymap.
+
 ## Usage
 
 ```bash

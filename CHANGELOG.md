@@ -6,7 +6,23 @@ All notable project changes are tracked here.
 
 ### Notes
 
-- Next planned focus: first full-screen TUI renderer and context-budget controls.
+- Next planned focus: context-budget controls and stronger tool registry boundaries.
+
+## 0.10.0 - 2026-05-21
+
+### Added
+
+- Added `npm run tui` as a dependency-free full-screen terminal UI spike.
+- Added `src/cli/tui.ts` with alternate-screen rendering, keyboard controls, recent-run selection, live event display, and model stream preview.
+- Added TUI continuation from a selected saved run.
+- Added TUI patch application through the existing safe patch proposal module.
+- Added `--once` for non-interactive TUI smoke tests.
+
+### Changed
+
+- Reused the V0.9 Agent Event Bus as the TUI renderer input.
+- Updated project planning, handoff context, and generated architecture snapshots for V0.10.
+- Bumped project version to `0.10.0`.
 
 ## 0.9.0 - 2026-05-21
 

@@ -22,10 +22,10 @@ Open http://localhost:3000 and run a goal from the workbench.
 
 ## Architecture
 
-![Architecture v0.9.0](docs/architecture/architecture-v0.9.0.svg)
+![Architecture v0.10.0](docs/architecture/architecture-v0.10.0.svg)
 
 - **Next.js App**: 负责输入任务、展示 agent trace、展示实时事件、结构化建议和续接历史运行。
-- **CLI Shell**: 通过 npm run agent 直接复用 agent runner，提供终端入口、事件流、token 输出、运行历史回看和续接。
+- **CLI/TUI Shell**: 通过 npm run agent 和 npm run tui 复用 agent runner，提供终端入口、事件流、token 输出、运行历史回看和续接。
 - **API Route**: 运行在 Node.js 服务端，提供 JSON 和 SSE 两种 agent 请求入口。
 - **Agent Runner**: 组织任务理解、仓库扫描、LLM 调用、事件总线、结果解析。
 - **DeepSeek Provider**: 封装 OpenAI-compatible chat completions 和 SSE token streaming。
@@ -39,12 +39,15 @@ Architecture snapshots are stored in `docs/architecture/` for version-to-version
 - Next.js 16 + React 19 + TypeScript 6 项目骨架。
 - 浏览器工作台：输入目标、运行 agent、查看步骤摘要和建议。
 - 终端入口：npm run agent 可直接运行同一套 agent runner，不依赖本地 Next 服务。
+- TUI 入口：npm run tui 打开全屏终端界面，展示目标、最近运行、实时事件和模型流片段。
 - CLI 状态视图：终端展示 answer、plan、filesToInspect、patchProposal 摘要和可选 trace。
 - CLI 流式 trace：npm run agent -- --stream 可在 agent 执行时打印事件并启用 DeepSeek token streaming。
 - CLI 运行历史：终端支持 --recent 和 --show 回看 .agent-runs 中的历史记录。
 - 终端补丁审批：npm run agent -- --apply 会要求用户确认后复用安全 patch apply 模块写入文件。
 - 验证命令串联：npm run agent -- --validate typecheck|build|all 可在终端运行白名单验证命令。
 - CLI 恢复上下文：npm run agent -- --continue <run-id> 可把历史 run 压缩成本轮上下文。
+- TUI 最近运行选择：方向键选择历史 run，按 c 可续接为新任务上下文。
+- TUI 人工审批：运行结果包含 patchProposal 时，按 a 复用安全 patch apply 模块应用补丁。
 - 服务端 API：POST /api/agent。
 - 流式 API：POST /api/agent/stream 通过 Server-Sent Events 输出 agent events。
 - API 续接参数：POST /api/agent 支持 resumeRunId，并保存 resumeFromRunId。
@@ -106,6 +109,7 @@ Sources:
 - V0.7 允许终端侧应用 patchProposal，但仍复用服务端同一套路径校验和 create/replace action 限制。
 - V0.8 用本地 run history 生成续接提示，只携带用户可见的摘要、计划、风险、补丁元信息和验证结果。
 - V0.9 把 runner 的回调升级为 Agent Event Bus，并用 SSE 让 Web 和后续 TUI 共享同一套事件协议。
+- V0.10 先用无依赖 ANSI alternate screen 做 TUI spike，验证终端布局和键盘事件，再决定是否引入专门 TUI 框架。
 
 ## Development Context
 
@@ -182,10 +186,17 @@ Sources:
 
 ### V0.10 · 全屏 TUI 雏形
 
-- TUI renderer spike
+- npm run tui
 - 键盘选择最近 run
 - 实时事件面板
 - 补丁审批面板
+
+### V0.11 · 上下文预算与工具边界
+
+- context budget 配置
+- 文件优先级策略
+- 工具注册表分层
+- 更清晰的审批策略
 
 ## Scripts
 
@@ -194,6 +205,7 @@ Sources:
 - `dev:inspect:break`: `DEBUG_AGENT_ROUTE_BREAK=1 DEBUG_DEEPSEEK_BREAK=1 next dev --inspect=127.0.0.1:9229 -H 127.0.0.1 --webpack`
 - `debug:check`: `node scripts/debug/check-agent-breakpoint.mjs`
 - `agent`: `node --import tsx src/cli/agent.ts`
+- `tui`: `node --import tsx src/cli/tui.ts`
 - `build`: `next build`
 - `start`: `next start`
 - `typecheck`: `tsc --noEmit`
