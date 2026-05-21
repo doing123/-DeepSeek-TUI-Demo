@@ -6,7 +6,23 @@ All notable project changes are tracked here.
 
 ### Notes
 
-- Next planned focus: CLI streaming feedback, terminal-side patch approval, and fuller session resume.
+- Next planned focus: multi-turn session resume and shared context between CLI and Web.
+
+## 0.7.0 - 2026-05-19
+
+### Added
+
+- Added runner step events so CLI can print high-level progress while the agent is running.
+- Added `npm run agent -- --stream` for incremental terminal progress output.
+- Added `npm run agent -- --apply` for terminal-side patch proposal approval and application.
+- Added `npm run agent -- --validate typecheck|build|all` for terminal validation command chaining.
+- Added `--yes` as an explicit non-interactive confirmation flag for CLI patch application.
+
+### Changed
+
+- Reused the existing patch safety module for terminal-side patch application.
+- Reused the existing validation whitelist for CLI validation commands.
+- Bumped project version to `0.7.0`.
 
 ## 0.6.0 - 2026-05-19
 

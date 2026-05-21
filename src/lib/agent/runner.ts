@@ -15,6 +15,7 @@ import {
 } from "./tools";
 import type {
   AgentAnswer,
+  AgentRunEvent,
   AgentRunResult,
   AgentStep,
   ToolCall,
@@ -25,35 +26,51 @@ import { listWorkspaceFiles } from "./workspace";
 type RunCodingAgentInput = {
   goal: string;
   workspaceRoot: string;
+  onEvent?: (event: AgentRunEvent) => void;
 };
 
 const MAX_TOOL_CALLS = 6;
 
 export async function runCodingAgent({
   goal,
-  workspaceRoot
+  workspaceRoot,
+  onEvent
 }: RunCodingAgentInput): Promise<AgentRunResult> {
   const startedAt = new Date().toISOString();
   const steps: AgentStep[] = [];
   const config = getDeepSeekConfig();
 
-  pushStep(steps, "理解目标", `收到任务：${goal}`, { kind: "system" });
+  pushStep(steps, "理解目标", `收到任务：${goal}`, { kind: "system" }, onEvent);
+  completeLatestStep(steps, undefined, {}, onEvent);
 
-  pushStep(steps, "建立文件索引", "列出仓库内可读的文本文件，作为工具循环的初始地图。", {
-    kind: "system"
-  });
+  pushStep(
+    steps,
+    "建立文件索引",
+    "列出仓库内可读的文本文件，作为工具循环的初始地图。",
+    {
+      kind: "system"
+    },
+    onEvent
+  );
   const files = await listWorkspaceFiles(workspaceRoot, { maxFiles: 160 });
   const snapshot: WorkspaceSnapshot = {
     root: workspaceRoot,
     fileCount: files.length,
     files
   };
-  completeLatestStep(steps, `已索引 ${snapshot.fileCount} 个文本文件。`);
+  completeLatestStep(steps, `已索引 ${snapshot.fileCount} 个文本文件。`, {}, onEvent);
 
   if (!hasDeepSeekKey(config)) {
-    pushStep(steps, "使用离线模式", "未检测到 DEEPSEEK_API_KEY，返回本地规划结果。", {
-      kind: "system"
-    });
+    pushStep(
+      steps,
+      "使用离线模式",
+      "未检测到 DEEPSEEK_API_KEY，返回本地规划结果。",
+      {
+        kind: "system"
+      },
+      onEvent
+    );
+    completeLatestStep(steps, undefined, {}, onEvent);
 
     return {
       id: randomUUID(),
@@ -87,12 +104,13 @@ export async function runCodingAgent({
       steps,
       "调用 DeepSeek",
       `第 ${toolCallCount + 1} 轮，模型：${config.model}，base URL：${config.baseUrl}`,
-      { kind: "model" }
+      { kind: "model" },
+      onEvent
     );
     const completion = await completeWithDeepSeek(messages, config);
     model = completion.model;
     rawText = completion.content;
-    completeLatestStep(steps, `收到 ${completion.model} 的响应。`);
+    completeLatestStep(steps, `收到 ${completion.model} 的响应。`, {}, onEvent);
 
     messages.push({
       role: "assistant",
@@ -149,15 +167,21 @@ export async function runCodingAgent({
         kind: "tool",
         toolName: parsed.call.name,
         toolInput: parsed.call.input
-      }
+      },
+      onEvent
     );
     const result = await executeReadOnlyTool(parsed.call, {
       workspaceRoot
     });
-    completeLatestStep(steps, result.summary, {
-      ok: result.ok,
-      toolOutput: summarizeToolOutput(result)
-    });
+    completeLatestStep(
+      steps,
+      result.summary,
+      {
+        ok: result.ok,
+        toolOutput: summarizeToolOutput(result)
+      },
+      onEvent
+    );
     messages.push(buildToolResultMessage(result));
   }
 
@@ -214,17 +238,26 @@ function pushStep(
   steps: AgentStep[],
   title: string,
   detail: string,
-  extra: Partial<AgentStep> = {}
+  extra: Partial<AgentStep> = {},
+  onEvent?: (event: AgentRunEvent) => void
 ) {
-  steps.push({
+  const step: AgentStep = {
     title,
     detail,
     startedAt: new Date().toISOString(),
     ...extra
-  });
+  };
+
+  steps.push(step);
+  onEvent?.({ type: "step_started", step });
 }
 
-function completeLatestStep(steps: AgentStep[], detail?: string, extra: Partial<AgentStep> = {}) {
+function completeLatestStep(
+  steps: AgentStep[],
+  detail?: string,
+  extra: Partial<AgentStep> = {},
+  onEvent?: (event: AgentRunEvent) => void
+) {
   const latest = steps.at(-1);
 
   if (!latest) {
@@ -237,20 +270,22 @@ function completeLatestStep(steps: AgentStep[], detail?: string, extra: Partial<
 
   latest.completedAt = new Date().toISOString();
   Object.assign(latest, extra);
+  onEvent?.({ type: "step_completed", step: latest });
 }
 
 function buildOfflineAnswer(fileCount: number): AgentAnswer {
   return {
-    title: "终端入口和补丁预览通道已就绪",
+    title: "终端审批和补丁预览通道已就绪",
     summary:
-      "当前运行在离线模式。V0.6 已经具备只读工具循环、结构化补丁提案、人工确认后的安全应用入口、运行历史和终端 CLI；配置 DEEPSEEK_API_KEY 后模型可以基于仓库上下文提出可预览补丁。",
+      "当前运行在离线模式。V0.7 已经具备只读工具循环、结构化补丁提案、人工确认后的安全应用入口、运行历史、终端 CLI、流式步骤反馈和终端侧补丁审批；配置 DEEPSEEK_API_KEY 后模型可以基于仓库上下文提出可预览补丁。",
     plan: [
       "把 Web UI 作为任务入口，收集用户的编码目标。",
       `服务端先索引当前工作区的 ${fileCount} 个文本文件。`,
       "模型通过严格 JSON 请求只读工具，服务端执行后把结果回填。",
       "模型在信息足够时输出结构化 final answer，可附带 patchProposal。",
       "用户在 UI 中审查 patchProposal 后，点击确认才会写入文件。",
-      "也可以通过 npm run agent -- \"目标\" 在终端里运行同一套 agent 内核。"
+      "也可以通过 npm run agent -- \"目标\" 在终端里运行同一套 agent 内核。",
+      "终端可通过 --stream 查看高层步骤事件，通过 --apply 审批补丁，通过 --validate 运行白名单验证。"
     ],
     filesToInspect: [
       "src/app/api/agent/route.ts",
@@ -258,10 +293,12 @@ function buildOfflineAnswer(fileCount: number): AgentAnswer {
       "src/lib/agent/tools.ts",
       "src/lib/agent/deepseek.ts",
       "src/lib/agent/workspace.ts",
-      "src/cli/agent.ts"
+      "src/cli/agent.ts",
+      "src/lib/agent/patches.ts",
+      "src/lib/agent/validation.ts"
     ],
     proposedChanges: [
-      "V0.7 可以加入 CLI 补丁审批、流式输出和更完整的会话恢复。"
+      "V0.8 可以加入更完整的多轮会话恢复和 CLI/Web 会话互通。"
     ],
     risks: [
       "当前版本只读仓库，不会自动修改文件。",
@@ -271,7 +308,8 @@ function buildOfflineAnswer(fileCount: number): AgentAnswer {
     nextActions: [
       "复制 .env.example 为 .env.local 并填写 DEEPSEEK_API_KEY。",
       "运行 npm run dev 后在浏览器中测试任务输入。",
-      "运行 npm run agent -- \"查看当前仓库状态\" 测试终端入口。"
+      "运行 npm run agent -- --stream \"查看当前仓库状态\" 测试流式步骤。",
+      "运行 npm run agent -- --validate typecheck \"检查当前实现\" 测试终端验证。"
     ]
   };
 }

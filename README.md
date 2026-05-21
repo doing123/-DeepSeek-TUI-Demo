@@ -22,7 +22,7 @@ Open http://localhost:3000 and run a goal from the workbench.
 
 ## Architecture
 
-![Architecture v0.6.0](docs/architecture/architecture-v0.6.0.svg)
+![Architecture v0.7.0](docs/architecture/architecture-v0.7.0.svg)
 
 - **Next.js App**: 负责输入任务、展示 agent trace、展示结构化建议。
 - **CLI Shell**: 通过 npm run agent 直接复用 agent runner，提供终端入口、trace 输出和运行历史回看。
@@ -40,7 +40,10 @@ Architecture snapshots are stored in `docs/architecture/` for version-to-version
 - 浏览器工作台：输入目标、运行 agent、查看步骤摘要和建议。
 - 终端入口：npm run agent 可直接运行同一套 agent runner，不依赖本地 Next 服务。
 - CLI 状态视图：终端展示 answer、plan、filesToInspect、patchProposal 摘要和可选 trace。
+- CLI 流式 trace：npm run agent -- --stream 可在 agent 执行时打印阶段开始和完成事件。
 - CLI 运行历史：终端支持 --recent 和 --show 回看 .agent-runs 中的历史记录。
+- 终端补丁审批：npm run agent -- --apply 会要求用户确认后复用安全 patch apply 模块写入文件。
+- 验证命令串联：npm run agent -- --validate typecheck|build|all 可在终端运行白名单验证命令。
 - 服务端 API：POST /api/agent。
 - DeepSeek provider：读取 DEEPSEEK_API_KEY、DEEPSEEK_BASE_URL、DEEPSEEK_MODEL。
 - 离线模式：没有 API key 时仍能返回本地规划结果。
@@ -92,6 +95,8 @@ Sources:
 - V0.5 后续维护把运行环境升级到 Node.js 22、Next.js 16 和 React 19，调试入口改用官方 next dev --inspect。
 - V0.6 让终端入口直接复用 agent runner，而不是绕 HTTP 调用本地页面服务，后续再演进为真正 TUI。
 - V0.6 的 Git 工具保持只读和固定命令列表，先让模型理解工作区状态，暂不允许模型执行任意 shell。
+- V0.7 把 runner 的高层步骤事件暴露给 CLI，用可解释的阶段进度代替隐藏推理流。
+- V0.7 允许终端侧应用 patchProposal，但仍复用服务端同一套路径校验和 create/replace action 限制。
 
 ## Development Context
 
@@ -152,6 +157,13 @@ Sources:
 - 终端补丁审批
 - 验证命令串联
 - 更完整的会话恢复
+
+### V0.8 · 多轮会话恢复
+
+- 完整 transcript 存储
+- 继续上次 run
+- 更细的 token/context 预算
+- CLI 与 Web 会话互通
 
 ## Scripts
 

@@ -62,9 +62,9 @@ Observed ideas to learn from:
 
 ## Current State
 
-Version: V0.6
+Version: V0.7
 
-The current implementation is a Node.js 22 + Next.js 16 learning workbench plus a small CLI shell. It has read-only tools, human-approved patch application, whitelist validation commands, local run history, and a terminal entrypoint, not a full-screen TUI yet.
+The current implementation is a Node.js 22 + Next.js 16 learning workbench plus a small CLI shell. It has read-only tools, human-approved patch application, whitelist validation commands, local run history, high-level runner events, and a terminal entrypoint, not a full-screen TUI yet.
 
 Implemented:
 
@@ -79,6 +79,9 @@ Implemented:
 - UI trace entries for tool input and output summaries.
 - CLI entrypoint at `src/cli/agent.ts`, runnable with `npm run agent`.
 - CLI output for answer, plan, files, patch proposal summary, optional trace, recent runs, and saved run detail.
+- CLI streaming mode through `--stream`, fed by high-level `AgentRunEvent` callbacks from the runner.
+- CLI patch application through `--apply`, reusing the same safe full-file patch module as the browser API.
+- CLI validation chaining through `--validate typecheck|build|all`, reusing the fixed validation command whitelist.
 - The `tsx` Node loader is used so the CLI can run TypeScript modules directly in development.
 - Structured `patchProposal` final answer format.
 - UI patch preview with explicit confirmation before writes.
@@ -139,7 +142,7 @@ UI / CLI
   -> Generated docs + architecture snapshot
 ```
 
-The V0.6 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 validation, V0.5 run history, and adds a terminal shell:
+The V0.7 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 validation, V0.5 run history, V0.6 terminal shell, and adds streaming/approval affordances to the CLI:
 
 1. User submits a goal.
 2. Agent creates a turn state.
@@ -154,6 +157,9 @@ The V0.6 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 valida
 11. Server saves lightweight run records under `.agent-runs`.
 12. UI and CLI can list recent runs and load a saved result.
 13. CLI can run the same agent runner directly without starting the Next dev server.
+14. CLI can print high-level step events as they happen.
+15. CLI can ask for explicit approval before applying patch proposals.
+16. CLI can run fixed validation commands after an agent run or patch application.
 
 Debugging uses the official Next.js 16 `next dev --inspect` path. Start `npm run dev:inspect:break`, attach VS Code with `Attach Next.js Server (9229)`, and run `npm run debug:check` to verify that the guarded `debugger` statement in `src/app/api/agent/route.ts` is reachable before testing normal source breakpoints.
 
@@ -254,6 +260,26 @@ Do not build yet:
 - model-suggested arbitrary shell execution
 - long-lived multi-turn session resume
 
+## V0.7 Completed
+
+Theme: streaming terminal feedback and CLI-side approval.
+
+Built:
+
+- `AgentRunEvent` type and runner `onEvent` callback.
+- `npm run agent -- --stream` for high-level step progress.
+- `npm run agent -- --apply` for terminal patch approval.
+- `npm run agent -- --apply --yes` for explicit non-interactive patch approval.
+- `npm run agent -- --validate typecheck|build|all` for whitelist validation chaining.
+- CLI validation results are appended to saved run records when saving is enabled.
+
+Do not build yet:
+
+- arbitrary shell execution from model output
+- full transcript replay
+- true multi-turn resume
+- full-screen TUI layout engine
+
 ## Safety Rules
 
 - macOS only for now.
@@ -270,7 +296,7 @@ Use this prompt when starting the next version:
 ```txt
 You are continuing DeepSeek TUI Demo.
 
-Goal: implement V0.7, streaming terminal feedback and safer terminal-side approval for a macOS-first coding-agent learning project built with Next.js and TypeScript.
+Goal: implement V0.8, multi-turn session resume for a macOS-first coding-agent learning project built with Next.js and TypeScript.
 
 Read first:
 - docs/DEVELOPMENT_CONTEXT.md
@@ -293,8 +319,9 @@ Constraints:
 - Keep human approval before writes.
 - Never execute model-suggested arbitrary commands.
 - Reuse the existing runner, run store, patch, and validation modules.
-- Add streaming or incremental terminal feedback without exposing hidden reasoning.
-- Explore terminal-side patch approval while keeping path/action validation.
+- Store enough structured transcript information to resume a previous task safely.
+- Add `npm run agent -- --continue <run-id>` or an equivalent command.
+- Keep CLI and Web run history compatible.
 - Keep validation commands whitelist-only.
 - Do not store API keys or full hidden reasoning.
 - Update README through npm run readme:generate.

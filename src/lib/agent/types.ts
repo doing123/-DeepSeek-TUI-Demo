@@ -19,6 +19,16 @@ export type AgentStep = {
   ok?: boolean;
 };
 
+export type AgentRunEvent =
+  | {
+      type: "step_started";
+      step: AgentStep;
+    }
+  | {
+      type: "step_completed";
+      step: AgentStep;
+    };
+
 export type WorkspaceFile = {
   path: string;
   size: number;

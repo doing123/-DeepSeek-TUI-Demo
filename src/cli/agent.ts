@@ -1,14 +1,20 @@
 import { readFile } from "fs/promises";
 import path from "path";
+import { createInterface } from "readline/promises";
 import { pathToFileURL } from "url";
 import type {
+  AgentRunEvent,
   AgentRunRecord,
   AgentRunResult,
   AgentRunSummary,
-  StoredAgentRunResult
+  PatchApplyResult,
+  StoredAgentRunResult,
+  ValidationCommandName,
+  ValidationRunResult
 } from "../lib/agent/types";
 
 type CliOptions = {
+  apply: boolean;
   cwd: string;
   goal: string;
   json: boolean;
@@ -16,8 +22,15 @@ type CliOptions = {
   recent: boolean;
   recentLimit: number;
   showRunId?: string;
+  stream: boolean;
   trace: boolean;
+  validate: ValidationCommandName[];
+  yes: boolean;
   help: boolean;
+};
+
+type CliPatchApplyResult = PatchApplyResult & {
+  skipped?: boolean;
 };
 
 // Terminal entrypoint for the same agent kernel used by the browser workbench.
@@ -56,7 +69,7 @@ async function main() {
     throw new Error("Please provide a goal, or pass --help for usage.");
   }
 
-  const [{ runCodingAgent }, { saveAgentRunRecord }] = await Promise.all([
+  const [{ runCodingAgent }, { saveAgentRunRecord, appendValidationToRun }] = await Promise.all([
     import("../lib/agent/runner"),
     import("../lib/agent/run-store")
   ]);
@@ -64,26 +77,52 @@ async function main() {
   printHeader(options.goal, workspaceRoot, options);
   const result = await runCodingAgent({
     goal: options.goal,
-    workspaceRoot
+    workspaceRoot,
+    onEvent: options.stream && !options.json ? printRunEvent : undefined
   });
+  let saved = false;
 
   if (!options.noSave) {
     await saveAgentRunRecord(workspaceRoot, result);
+    saved = true;
   }
 
-  printAgentResult(result, options);
+  if (!options.json) {
+    printAgentResult(result, options);
+  }
+
+  const patchResult = await maybeApplyPatch(workspaceRoot, result, options);
+  const validations = await runRequestedValidations(workspaceRoot, options);
+
+  if (saved) {
+    for (const validation of validations) {
+      await appendValidationToRun(workspaceRoot, result.id, validation);
+    }
+  }
+
+  if (options.json) {
+    console.log(JSON.stringify({ result, patchResult, validations }, null, 2));
+    return;
+  }
+
+  printPatchApplyResult(patchResult, options);
+  printValidationResults(validations, options);
   printSaveHint(result, options);
 }
 
 async function parseArgs(args: string[]): Promise<CliOptions> {
   const options: CliOptions = {
+    apply: false,
     cwd: process.cwd(),
     goal: "",
     json: false,
     noSave: false,
     recent: false,
     recentLimit: 10,
+    stream: false,
     trace: false,
+    validate: [],
+    yes: false,
     help: false
   };
   const goalParts: string[] = [];
@@ -106,8 +145,29 @@ async function parseArgs(args: string[]): Promise<CliOptions> {
       continue;
     }
 
+    if (arg === "--apply") {
+      options.apply = true;
+      continue;
+    }
+
+    if (arg === "--yes" || arg === "-y") {
+      options.yes = true;
+      continue;
+    }
+
+    if (arg === "--stream") {
+      options.stream = true;
+      continue;
+    }
+
     if (arg === "--trace") {
       options.trace = true;
+      continue;
+    }
+
+    if (arg === "--validate") {
+      options.validate = readValidationTargets(args[index + 1]);
+      index += 1;
       continue;
     }
 
@@ -173,6 +233,94 @@ async function loadEnvFile(filePath: string) {
   }
 }
 
+function printRunEvent(event: AgentRunEvent) {
+  if (event.type === "step_started") {
+    console.log(`-> ${event.step.title}`);
+    return;
+  }
+
+  console.log(`<- ${event.step.title}: ${event.step.detail}`);
+}
+
+async function maybeApplyPatch(
+  workspaceRoot: string,
+  result: AgentRunResult,
+  options: CliOptions
+): Promise<CliPatchApplyResult | null> {
+  if (!options.apply) {
+    return null;
+  }
+
+  const proposal = result.answer.patchProposal;
+
+  if (!proposal) {
+    return {
+      ok: false,
+      appliedFiles: [],
+      errors: ["No patchProposal was returned by the agent."],
+      skipped: true
+    };
+  }
+
+  const approved = await confirmPatchApply(proposal.files.length, options);
+
+  if (!approved) {
+    return {
+      ok: false,
+      appliedFiles: [],
+      errors: ["Patch application skipped by user."],
+      skipped: true
+    };
+  }
+
+  const { applyPatchProposal } = await import("../lib/agent/patches");
+  return applyPatchProposal(workspaceRoot, proposal);
+}
+
+async function confirmPatchApply(fileCount: number, options: CliOptions) {
+  if (options.yes) {
+    return true;
+  }
+
+  if (!process.stdin.isTTY) {
+    return false;
+  }
+
+  const prompt = createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  try {
+    const answer = await prompt.question(
+      `Apply patch proposal for ${fileCount} file(s)? Type "apply" to continue: `
+    );
+    return answer.trim() === "apply";
+  } finally {
+    prompt.close();
+  }
+}
+
+async function runRequestedValidations(workspaceRoot: string, options: CliOptions) {
+  const results: ValidationRunResult[] = [];
+
+  if (options.validate.length === 0) {
+    return results;
+  }
+
+  const { runValidationCommand } = await import("../lib/agent/validation");
+
+  for (const command of options.validate) {
+    if (!options.json) {
+      console.log(`Running validation: ${command}`);
+    }
+
+    results.push(await runValidationCommand(workspaceRoot, command));
+  }
+
+  return results;
+}
+
 function printHeader(goal: string, workspaceRoot: string, options: CliOptions) {
   if (options.json) {
     return;
@@ -182,6 +330,52 @@ function printHeader(goal: string, workspaceRoot: string, options: CliOptions) {
   console.log(`Workspace: ${workspaceRoot}`);
   console.log(`Goal: ${goal}`);
   console.log("");
+}
+
+function printPatchApplyResult(result: CliPatchApplyResult | null, options: CliOptions) {
+  if (!result || options.json) {
+    return;
+  }
+
+  console.log("");
+  console.log(result.skipped ? "Patch Apply Skipped" : "Patch Apply Result");
+
+  if (result.appliedFiles.length > 0) {
+    console.log("Applied files:");
+    for (const file of result.appliedFiles) {
+      console.log(`- ${file}`);
+    }
+  }
+
+  if (result.errors.length > 0) {
+    console.log("Messages:");
+    for (const error of result.errors) {
+      console.log(`- ${error}`);
+    }
+  }
+}
+
+function printValidationResults(results: ValidationRunResult[], options: CliOptions) {
+  if (results.length === 0 || options.json) {
+    return;
+  }
+
+  console.log("");
+  console.log("Validation Results");
+
+  for (const result of results) {
+    console.log(
+      `- ${result.ok ? "ok" : "failed"} ${result.displayCommand} (${result.durationMs}ms)`
+    );
+
+    if (!result.ok) {
+      const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
+
+      if (output) {
+        console.log(trimForCli(output));
+      }
+    }
+  }
 }
 
 function printAgentResult(result: AgentRunResult | StoredAgentRunResult, options: CliOptions) {
@@ -275,7 +469,7 @@ function printPatchProposal(result: AgentRunResult | StoredAgentRunResult) {
   }
 }
 
-function printTrace(result: AgentRunResult) {
+function printTrace(result: AgentRunResult | StoredAgentRunResult) {
   console.log("");
   console.log("Trace");
   for (const [index, step] of result.steps.entries()) {
@@ -326,7 +520,11 @@ Options:
   --cwd <path>     Workspace root. Defaults to the current directory.
   --json           Print machine-readable JSON.
   --no-save        Do not persist this run to .agent-runs.
+  --stream         Print step updates while the agent is running.
   --trace          Print detailed agent trace entries.
+  --apply          Ask before applying a returned patch proposal.
+  -y, --yes        Confirm --apply without an interactive prompt.
+  --validate <x>   Run typecheck, build, or all after the agent run.
   --recent         List recent saved runs.
   --limit <n>      Limit --recent output. Defaults to 10.
   --show <run-id>  Show one saved run.
@@ -364,6 +562,31 @@ function readPositiveInt(value: string | undefined, flag: string) {
   }
 
   return parsed;
+}
+
+function readValidationTargets(value: string | undefined): ValidationCommandName[] {
+  const raw = readRequiredArg(value, "--validate");
+
+  if (raw === "all") {
+    return ["typecheck", "build"];
+  }
+
+  const targets = raw.split(",").map((item) => item.trim()).filter(Boolean);
+  const uniqueTargets = new Set<ValidationCommandName>();
+
+  for (const target of targets) {
+    if (target !== "typecheck" && target !== "build") {
+      throw new Error("--validate must be typecheck, build, or all.");
+    }
+
+    uniqueTargets.add(target);
+  }
+
+  return [...uniqueTargets];
+}
+
+function trimForCli(value: string) {
+  return value.length > 2400 ? `${value.slice(-2400)}\n...` : value;
 }
 
 function stripEnvQuotes(value: string) {
