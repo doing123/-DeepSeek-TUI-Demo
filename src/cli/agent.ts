@@ -92,6 +92,7 @@ async function main() {
     goal: options.goal,
     promptGoal,
     resumeFromRunId: resumeRecord?.id,
+    streamModel: options.stream,
     workspaceRoot,
     onEvent: options.stream && !options.json ? printRunEvent : undefined
   });
@@ -255,12 +256,41 @@ async function loadEnvFile(filePath: string) {
 }
 
 function printRunEvent(event: AgentRunEvent) {
+  if (event.type === "run_started") {
+    console.log(`== run started: ${event.startedAt}`);
+    return;
+  }
+
   if (event.type === "step_started") {
     console.log(`-> ${event.step.title}`);
     return;
   }
 
-  console.log(`<- ${event.step.title}: ${event.step.detail}`);
+  if (event.type === "step_completed") {
+    console.log(`<- ${event.step.title}: ${event.step.detail}`);
+    return;
+  }
+
+  if (event.type === "model_stream_started") {
+    console.log(`~~ streaming ${event.model} turn ${event.turn}`);
+    return;
+  }
+
+  if (event.type === "model_token") {
+    process.stdout.write(event.token);
+    return;
+  }
+
+  if (event.type === "model_stream_completed") {
+    console.log("");
+    console.log(`~~ stream complete (${event.contentLength} chars)`);
+    return;
+  }
+
+  if (event.type === "tool_call") {
+    console.log(`=> tool_call ${event.call.name}`);
+    return;
+  }
 }
 
 async function maybeApplyPatch(

@@ -1,8 +1,9 @@
 # CLI
 
-V0.8 keeps the small terminal shell and adds saved-run continuation. It is
-intentionally not a full-screen TUI yet, but the command flow now looks closer
-to a practical coding agent loop: run, inspect, continue, approve, validate.
+V0.9 keeps the small terminal shell and adds provider token streaming through
+the shared Agent Event Bus. It is intentionally not a full-screen TUI yet, but
+the command flow now looks closer to a practical coding agent loop: run, stream,
+inspect, continue, approve, validate.
 
 ## Usage
 
@@ -16,7 +17,7 @@ Print detailed trace entries:
 npm run agent -- --trace "分析 src/lib/agent 的工具调用流程"
 ```
 
-Print high-level step events while the agent is running:
+Print runner events and model token chunks while the agent is running:
 
 ```bash
 npm run agent -- --stream "分析当前仓库状态"
@@ -65,6 +66,8 @@ npm run agent -- --json "查看当前仓库有哪些风险"
 - It loads `.env.local` and `.env` before running the agent so DeepSeek config
   works outside Next.js.
 - It saves runs to `.agent-runs` by default, matching the browser workbench.
+- `--stream` enables the runner event bus and asks DeepSeek for streaming
+  completions when `DEEPSEEK_API_KEY` is configured.
 - `--continue <run-id>` reads a saved run and passes a compact summary of its
   visible result, patch metadata, and validation history into the next prompt.
 - Patch proposals can be applied from the terminal with `--apply`, but only after

@@ -358,6 +358,26 @@ button {
   font-size: 16px;
 }
 
+.live-run .list {
+  max-height: 520px;
+  overflow: auto;
+}
+
+.live-token-stream {
+  margin: 0;
+  min-height: 240px;
+  max-height: 520px;
+  overflow: auto;
+  padding: 14px;
+  border-radius: 8px;
+  background: var(--code);
+  color: #dff7ec;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
 .summary {
   margin: 0;
   color: var(--muted);

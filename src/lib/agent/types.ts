@@ -21,12 +21,42 @@ export type AgentStep = {
 
 export type AgentRunEvent =
   | {
+      type: "run_started";
+      goal: string;
+      startedAt: string;
+      resumeFromRunId?: string;
+    }
+  | {
       type: "step_started";
       step: AgentStep;
     }
   | {
       type: "step_completed";
       step: AgentStep;
+    }
+  | {
+      type: "model_stream_started";
+      model: string;
+      turn: number;
+    }
+  | {
+      type: "model_token";
+      token: string;
+      turn: number;
+    }
+  | {
+      type: "model_stream_completed";
+      model: string;
+      turn: number;
+      contentLength: number;
+    }
+  | {
+      type: "tool_call";
+      call: ToolCall;
+    }
+  | {
+      type: "run_completed";
+      result: AgentRunResult;
     };
 
 export type WorkspaceFile = {

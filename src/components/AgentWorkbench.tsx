@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type {
+  AgentRunEvent,
   AgentRunRecord,
   AgentRunResult,
   AgentRunSummary,
@@ -27,6 +28,8 @@ export function AgentWorkbench() {
   const [result, setResult] = useState<AgentRunResult | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<AgentRunRecord | null>(null);
   const [resumeRun, setResumeRun] = useState<AgentRunSummary | null>(null);
+  const [liveEvents, setLiveEvents] = useState<AgentRunEvent[]>([]);
+  const [streamText, setStreamText] = useState("");
   const [recentRuns, setRecentRuns] = useState<AgentRunSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -58,6 +61,8 @@ export function AgentWorkbench() {
     setSelectedRecord(record);
     setResult(record.result);
     setResumeRun(null);
+    setLiveEvents([]);
+    setStreamText("");
     setError(null);
   }
 
@@ -65,6 +70,8 @@ export function AgentWorkbench() {
     setResumeRun(run);
     setGoal(`继续上一轮任务：${run.goal}\n\n本轮目标：`);
     setSelectedRecord(null);
+    setLiveEvents([]);
+    setStreamText("");
     setError(null);
   }
 
@@ -86,9 +93,11 @@ export function AgentWorkbench() {
     setError(null);
     setResult(null);
     setSelectedRecord(null);
+    setLiveEvents([]);
+    setStreamText("");
 
     try {
-      const response = await fetch("/api/agent", {
+      const response = await fetch("/api/agent/stream", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -99,13 +108,24 @@ export function AgentWorkbench() {
         })
       });
 
-      const payload = (await response.json()) as AgentRunResult | { error?: string };
-
       if (!response.ok) {
-        throw new Error("error" in payload && payload.error ? payload.error : "Agent run failed");
+        throw new Error(await readErrorMessage(response));
       }
 
-      setResult(payload as AgentRunResult);
+      await consumeAgentEventStream(response, {
+        onEvent: (event) => {
+          if (event.type === "model_token") {
+            setStreamText((current) => `${current}${event.token}`);
+            return;
+          }
+
+          setLiveEvents((current) => [...current, event].slice(-30));
+
+          if (event.type === "run_completed") {
+            setResult(event.result);
+          }
+        }
+      });
       setResumeRun(null);
       await loadRecentRuns();
     } catch (runError) {
@@ -193,6 +213,8 @@ export function AgentWorkbench() {
           <div className="panel error">{error}</div>
         ) : result ? (
           <AgentResultView result={result} record={selectedRecord} />
+        ) : isRunning || liveEvents.length > 0 || streamText ? (
+          <LiveRunView events={liveEvents} streamText={streamText} />
         ) : (
           <div className="empty">
             <p>输入任务后运行，右侧会显示 agent 的扫描步骤、建议和后续动作。</p>
@@ -201,6 +223,95 @@ export function AgentWorkbench() {
       </section>
     </main>
   );
+}
+
+function LiveRunView({
+  events,
+  streamText
+}: {
+  events: AgentRunEvent[];
+  streamText: string;
+}) {
+  return (
+    <div className="output-grid">
+      <section className="panel live-run">
+        <h2>实时运行</h2>
+        <ul className="list">
+          {events.map((event, index) => (
+            <li key={`${event.type}-${index}`}>
+              <span className="step-title">{formatLiveEventTitle(event)}</span>
+              <span className="step-meta">{formatLiveEventDetail(event)}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <aside>
+        <section className="panel">
+          <h3>模型流</h3>
+          <pre className="live-token-stream">{streamText || "等待模型输出..."}</pre>
+        </section>
+      </aside>
+    </div>
+  );
+}
+
+function formatLiveEventTitle(event: AgentRunEvent) {
+  if (event.type === "run_started") {
+    return "开始运行";
+  }
+
+  if (event.type === "step_started" || event.type === "step_completed") {
+    return event.step.title;
+  }
+
+  if (event.type === "model_stream_started") {
+    return "模型流开始";
+  }
+
+  if (event.type === "model_stream_completed") {
+    return "模型流完成";
+  }
+
+  if (event.type === "tool_call") {
+    return `工具调用：${event.call.name}`;
+  }
+
+  if (event.type === "run_completed") {
+    return "运行完成";
+  }
+
+  return "模型输出";
+}
+
+function formatLiveEventDetail(event: AgentRunEvent) {
+  if (event.type === "run_started") {
+    return event.resumeFromRunId
+      ? `续接 ${event.resumeFromRunId}`
+      : event.goal;
+  }
+
+  if (event.type === "step_started" || event.type === "step_completed") {
+    return event.step.detail;
+  }
+
+  if (event.type === "model_stream_started") {
+    return `${event.model} · turn ${event.turn}`;
+  }
+
+  if (event.type === "model_stream_completed") {
+    return `${event.model} · ${event.contentLength} chars`;
+  }
+
+  if (event.type === "tool_call") {
+    return JSON.stringify(event.call.input);
+  }
+
+  if (event.type === "run_completed") {
+    return event.result.id;
+  }
+
+  return `${event.token.length} chars`;
 }
 
 function RecentRunsPanel({
@@ -551,6 +662,98 @@ function ValidationPanel({
       {error ? <div className="validation-result">{error}</div> : null}
     </section>
   );
+}
+
+async function consumeAgentEventStream(
+  response: Response,
+  handlers: {
+    onEvent: (event: AgentRunEvent) => void;
+  }
+) {
+  if (!response.body) {
+    throw new Error("Agent stream response did not include a body.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    const frames = buffer.split(/\r?\n\r?\n/);
+    buffer = frames.pop() ?? "";
+
+    for (const frame of frames) {
+      handleSseFrame(frame, handlers);
+    }
+  }
+
+  if (buffer.trim()) {
+    handleSseFrame(buffer, handlers);
+  }
+}
+
+function handleSseFrame(
+  frame: string,
+  handlers: {
+    onEvent: (event: AgentRunEvent) => void;
+  }
+) {
+  const parsed = parseSseFrame(frame);
+
+  if (!parsed) {
+    return;
+  }
+
+  if (parsed.event === "agent_event") {
+    handlers.onEvent(parsed.data as AgentRunEvent);
+    return;
+  }
+
+  if (parsed.event === "error") {
+    const payload = parsed.data as { error?: string };
+    throw new Error(payload.error ?? "Agent stream failed");
+  }
+}
+
+function parseSseFrame(frame: string) {
+  const lines = frame.split(/\r?\n/);
+  let event = "message";
+  const dataLines: string[] = [];
+
+  for (const line of lines) {
+    if (line.startsWith("event:")) {
+      event = line.slice("event:".length).trim();
+    }
+
+    if (line.startsWith("data:")) {
+      dataLines.push(line.slice("data:".length).trimStart());
+    }
+  }
+
+  if (dataLines.length === 0) {
+    return null;
+  }
+
+  return {
+    event,
+    data: JSON.parse(dataLines.join("\n")) as unknown
+  };
+}
+
+async function readErrorMessage(response: Response) {
+  try {
+    const payload = (await response.json()) as { error?: string };
+    return payload.error ?? "Agent run failed";
+  } catch {
+    return "Agent run failed";
+  }
 }
 
 function formatJson(value: unknown) {

@@ -2,7 +2,8 @@ import { randomUUID } from "crypto";
 import {
   completeWithDeepSeek,
   getDeepSeekConfig,
-  hasDeepSeekKey
+  hasDeepSeekKey,
+  streamCompleteWithDeepSeek
 } from "./deepseek";
 import { normalizePatchProposal } from "./patches";
 import { buildCodingAgentMessages, buildToolResultMessage } from "./prompts";
@@ -27,6 +28,7 @@ type RunCodingAgentInput = {
   goal: string;
   promptGoal?: string;
   resumeFromRunId?: string;
+  streamModel?: boolean;
   workspaceRoot: string;
   onEvent?: (event: AgentRunEvent) => void;
 };
@@ -37,6 +39,7 @@ export async function runCodingAgent({
   goal,
   promptGoal,
   resumeFromRunId,
+  streamModel = false,
   workspaceRoot,
   onEvent
 }: RunCodingAgentInput): Promise<AgentRunResult> {
@@ -44,6 +47,13 @@ export async function runCodingAgent({
   const steps: AgentStep[] = [];
   const config = getDeepSeekConfig();
   const modelGoal = promptGoal ?? goal;
+
+  onEvent?.({
+    type: "run_started",
+    goal,
+    startedAt,
+    resumeFromRunId
+  });
 
   pushStep(steps, "理解目标", `收到任务：${goal}`, { kind: "system" }, onEvent);
   completeLatestStep(steps, undefined, {}, onEvent);
@@ -90,7 +100,7 @@ export async function runCodingAgent({
     );
     completeLatestStep(steps, undefined, {}, onEvent);
 
-    return {
+    const result: AgentRunResult = {
       id: randomUUID(),
       goal,
       resumeFromRunId,
@@ -106,6 +116,9 @@ export async function runCodingAgent({
       toolCallCount: 0,
       answer: buildOfflineAnswer(snapshot.fileCount)
     };
+
+    onEvent?.({ type: "run_completed", result });
+    return result;
   }
 
   const messages = buildCodingAgentMessages(
@@ -126,7 +139,10 @@ export async function runCodingAgent({
       { kind: "model" },
       onEvent
     );
-    const completion = await completeWithDeepSeek(messages, config);
+    const turn = toolCallCount + 1;
+    const completion = streamModel
+      ? await completeWithStreaming(messages, config, turn, onEvent)
+      : await completeWithDeepSeek(messages, config);
     model = completion.model;
     rawText = completion.content;
     completeLatestStep(steps, `收到 ${completion.model} 的响应。`, {}, onEvent);
@@ -139,7 +155,7 @@ export async function runCodingAgent({
     const parsed = parseModelResponse(completion.content);
 
     if (parsed.type === "final") {
-      return buildRunResult({
+      return completeRunResult({
         goal,
         resumeFromRunId,
         model,
@@ -149,11 +165,11 @@ export async function runCodingAgent({
         toolCallCount,
         answer: parsed.answer,
         rawText: parsed.rawText
-      });
+      }, onEvent);
     }
 
     if (parsed.type === "invalid") {
-      return buildRunResult({
+      return completeRunResult({
         goal,
         resumeFromRunId,
         model,
@@ -163,11 +179,11 @@ export async function runCodingAgent({
         toolCallCount,
         answer: buildInvalidResponseAnswer(parsed.reason, completion.content),
         rawText: completion.content
-      });
+      }, onEvent);
     }
 
     if (toolCallCount >= MAX_TOOL_CALLS) {
-      return buildRunResult({
+      return completeRunResult({
         goal,
         resumeFromRunId,
         model,
@@ -177,10 +193,11 @@ export async function runCodingAgent({
         toolCallCount,
         answer: buildToolLimitAnswer(MAX_TOOL_CALLS),
         rawText
-      });
+      }, onEvent);
     }
 
     toolCallCount += 1;
+    onEvent?.({ type: "tool_call", call: parsed.call });
     pushStep(
       steps,
       `工具调用：${parsed.call.name}`,
@@ -207,7 +224,7 @@ export async function runCodingAgent({
     messages.push(buildToolResultMessage(result));
   }
 
-  return buildRunResult({
+  return completeRunResult({
     goal,
     resumeFromRunId,
     model,
@@ -217,7 +234,50 @@ export async function runCodingAgent({
     toolCallCount,
     answer: buildToolLimitAnswer(MAX_TOOL_CALLS),
     rawText
+  }, onEvent);
+}
+
+async function completeWithStreaming(
+  messages: Parameters<typeof completeWithDeepSeek>[0],
+  config: ReturnType<typeof getDeepSeekConfig>,
+  turn: number,
+  onEvent?: (event: AgentRunEvent) => void
+) {
+  onEvent?.({
+    type: "model_stream_started",
+    model: config.model,
+    turn
   });
+
+  const completion = await streamCompleteWithDeepSeek(
+    messages,
+    (token) => {
+      onEvent?.({
+        type: "model_token",
+        token,
+        turn
+      });
+    },
+    config
+  );
+
+  onEvent?.({
+    type: "model_stream_completed",
+    model: completion.model,
+    turn,
+    contentLength: completion.content.length
+  });
+
+  return completion;
+}
+
+function completeRunResult(
+  input: Parameters<typeof buildRunResult>[0],
+  onEvent?: (event: AgentRunEvent) => void
+) {
+  const result = buildRunResult(input);
+  onEvent?.({ type: "run_completed", result });
+  return result;
 }
 
 function buildRunResult({
@@ -301,9 +361,9 @@ function completeLatestStep(
 
 function buildOfflineAnswer(fileCount: number): AgentAnswer {
   return {
-    title: "多轮恢复上下文通道已就绪",
+    title: "流式事件总线通道已就绪",
     summary:
-      "当前运行在离线模式。V0.8 已经具备只读工具循环、结构化补丁提案、人工确认后的安全应用入口、运行历史、终端 CLI、流式步骤反馈、终端侧补丁审批和基于本地 run history 的续接能力；配置 DEEPSEEK_API_KEY 后模型可以基于仓库上下文提出可预览补丁。",
+      "当前运行在离线模式。V0.9 已经具备只读工具循环、结构化补丁提案、人工确认后的安全应用入口、运行历史、终端 CLI、续接上下文、Agent Event Bus 和 DeepSeek token streaming 接口；配置 DEEPSEEK_API_KEY 后模型可以通过 CLI 或 Web 流式输出。",
     plan: [
       "把 Web UI 作为任务入口，收集用户的编码目标。",
       `服务端先索引当前工作区的 ${fileCount} 个文本文件。`,
@@ -312,7 +372,8 @@ function buildOfflineAnswer(fileCount: number): AgentAnswer {
       "用户在 UI 中审查 patchProposal 后，点击确认才会写入文件。",
       "也可以通过 npm run agent -- \"目标\" 在终端里运行同一套 agent 内核。",
       "终端可通过 --stream 查看高层步骤事件，通过 --apply 审批补丁，通过 --validate 运行白名单验证。",
-      "CLI 和 Web 都可以选择历史 run，把上一轮摘要、计划、风险、补丁元信息和验证结果作为本轮上下文。"
+      "CLI 和 Web 都可以选择历史 run，把上一轮摘要、计划、风险、补丁元信息和验证结果作为本轮上下文。",
+      "Web 流式 API 会发送 run、step、model token、tool call 和 run completed 事件。"
     ],
     filesToInspect: [
       "src/app/api/agent/route.ts",
@@ -323,10 +384,11 @@ function buildOfflineAnswer(fileCount: number): AgentAnswer {
       "src/cli/agent.ts",
       "src/lib/agent/patches.ts",
       "src/lib/agent/validation.ts",
-      "src/lib/agent/resume.ts"
+      "src/lib/agent/resume.ts",
+      "src/app/api/agent/stream/route.ts"
     ],
     proposedChanges: [
-      "V0.9 可以把模型输出升级为真正的 token streaming，并为后续全屏 TUI 做事件流适配。"
+      "V0.10 可以基于同一套事件总线做真正的全屏 TUI 雏形。"
     ],
     risks: [
       "当前版本只读仓库，不会自动修改文件。",
@@ -336,7 +398,7 @@ function buildOfflineAnswer(fileCount: number): AgentAnswer {
     nextActions: [
       "复制 .env.example 为 .env.local 并填写 DEEPSEEK_API_KEY。",
       "运行 npm run dev 后在浏览器中测试任务输入。",
-      "运行 npm run agent -- --stream \"查看当前仓库状态\" 测试流式步骤。",
+      "运行 npm run agent -- --stream \"查看当前仓库状态\" 测试终端 token streaming。",
       "运行 npm run agent -- --continue <run-id> \"继续上一轮任务\" 测试恢复上下文。",
       "运行 npm run agent -- --validate typecheck \"检查当前实现\" 测试终端验证。"
     ]

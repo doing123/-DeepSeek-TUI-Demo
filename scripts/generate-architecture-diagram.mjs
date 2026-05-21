@@ -31,7 +31,7 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     {
       id: "ui",
       label: "Workbench + CLI",
-      detail: "浏览器工作台 / npm run agent / trace 输出",
+      detail: "浏览器工作台 / CLI / live events",
       x: 70,
       y: 170,
       w: 260,
@@ -40,8 +40,8 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     },
     {
       id: "api",
-      label: "POST /api/agent",
-      detail: "服务端入口 / 保护 API key / macOS workspace",
+      label: "Agent API Routes",
+      detail: "JSON result / SSE events / protected API key",
       x: 430,
       y: 170,
       w: 260,
@@ -51,7 +51,7 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     {
       id: "runner",
       label: "Agent Runner",
-      detail: "目标理解 / 工具循环 / 上限控制 / final answer",
+      detail: "目标理解 / 工具循环 / Event Bus",
       x: 790,
       y: 170,
       w: 300,
@@ -61,7 +61,7 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     {
       id: "provider",
       label: "DeepSeek Provider",
-      detail: "OpenAI-compatible chat completions",
+      detail: "chat completions / SSE token streaming",
       x: 1160,
       y: 170,
       w: 260,
@@ -237,6 +237,10 @@ function pickFeatureHighlights(features) {
       "CLI 运行历史",
       "CLI 恢复上下文",
       "终端补丁审批",
+      "流式 API",
+      "DeepSeek streaming",
+      "Agent Event Bus",
+      "实时运行视图",
       "Git 只读上下文",
       "验证命令串联",
       "API 续接参数",

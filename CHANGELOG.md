@@ -6,7 +6,22 @@ All notable project changes are tracked here.
 
 ### Notes
 
-- Next planned focus: token streaming and a first full-screen TUI renderer spike.
+- Next planned focus: first full-screen TUI renderer and context-budget controls.
+
+## 0.9.0 - 2026-05-21
+
+### Added
+
+- Added Agent Event Bus events for run start, model stream, model token, tool call, and run completion.
+- Added DeepSeek OpenAI-compatible SSE token streaming in the provider.
+- Added `POST /api/agent/stream` for browser/TUI-style event streaming.
+- Added Web live-run rendering for agent events and streamed model text.
+
+### Changed
+
+- `npm run agent -- --stream` now enables provider token streaming when DeepSeek is configured.
+- Updated offline guidance, CLI docs, project plan, development context, and architecture snapshots for V0.9.
+- Bumped project version to `0.9.0`.
 
 ## 0.8.0 - 2026-05-21
 

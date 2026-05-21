@@ -62,17 +62,18 @@ Observed ideas to learn from:
 
 ## Current State
 
-Version: V0.8
+Version: V0.9
 
-The current implementation is a Node.js 22 + Next.js 16 learning workbench plus a small CLI shell. It has read-only tools, human-approved patch application, whitelist validation commands, local run history, high-level runner events, terminal approval flow, and a simple resume mechanism, not a full-screen TUI yet.
+The current implementation is a Node.js 22 + Next.js 16 learning workbench plus a small CLI shell. It has read-only tools, human-approved patch application, whitelist validation commands, local run history, Agent Event Bus, DeepSeek token streaming, terminal approval flow, and a simple resume mechanism, not a full-screen TUI yet.
 
 Implemented:
 
 - Next.js app with a browser workbench.
 - API route at `POST /api/agent`.
-- Agent runner with high-level trace steps.
+- API route at `POST /api/agent/stream` for Server-Sent Event streaming.
+- Agent runner with high-level trace steps and typed event bus events.
 - Workspace text-file index with ignored heavy directories and real `.env` files.
-- DeepSeek provider using OpenAI-compatible chat completions.
+- DeepSeek provider using OpenAI-compatible chat completions and SSE token streaming.
 - Provider-agnostic JSON tool-call protocol.
 - Read-only `list_files`, `read_file`, `search_text`, and `git_status` tools.
 - Tool-call limit to avoid runaway loops.
@@ -80,6 +81,7 @@ Implemented:
 - CLI entrypoint at `src/cli/agent.ts`, runnable with `npm run agent`.
 - CLI output for answer, plan, files, patch proposal summary, optional trace, recent runs, and saved run detail.
 - CLI streaming mode through `--stream`, fed by high-level `AgentRunEvent` callbacks from the runner.
+- CLI `--stream` enables DeepSeek token streaming when the API key is configured.
 - CLI patch application through `--apply`, reusing the same safe full-file patch module as the browser API.
 - CLI validation chaining through `--validate typecheck|build|all`, reusing the fixed validation command whitelist.
 - The `tsx` Node loader is used so the CLI can run TypeScript modules directly in development.
@@ -93,8 +95,10 @@ Implemented:
 - Local `.agent-runs` store for lightweight run records.
 - Recent-runs UI for inspecting previous agent results.
 - Recent-runs UI can start a continuation from a saved run.
+- Web workbench renders live agent events and streamed model text while a run is active.
 - `POST /api/agent` accepts `resumeRunId` and records `resumeFromRunId`.
 - `src/lib/agent/resume.ts` compresses visible run output, patch metadata, and validation history into a resume prompt.
+- `AgentRunEvent` now includes run, model stream, model token, tool call, and completion events.
 - Validation results can be linked to a saved run by `runId`.
 - VS Code can start a Next inspector session with guarded debug probes for browser-triggered `/api/agent` requests.
 - `npm run debug:check` can verify that `/api/agent` pauses through the inspector without calling DeepSeek.
@@ -108,6 +112,7 @@ Important files:
 
 - `src/components/AgentWorkbench.tsx`
 - `src/app/api/agent/route.ts`
+- `src/app/api/agent/stream/route.ts`
 - `src/lib/agent/runner.ts`
 - `src/lib/agent/tools.ts`
 - `src/lib/agent/git-tools.ts`
@@ -147,7 +152,7 @@ UI / CLI
   -> Generated docs + architecture snapshot
 ```
 
-The V0.8 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 validation, V0.5 run history, V0.6 terminal shell, V0.7 CLI streaming/approval, and adds cross-surface continuation:
+The V0.9 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 validation, V0.5 run history, V0.6 terminal shell, V0.7 CLI streaming/approval, V0.8 cross-surface continuation, and adds a shared event stream:
 
 1. User submits a goal.
 2. Agent creates a turn state.
@@ -168,6 +173,9 @@ The V0.8 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 valida
 17. UI or CLI can select a saved run to continue.
 18. Resume context is rebuilt from user-visible summaries, patch metadata, and validation records.
 19. The new run preserves the user's fresh goal and stores `resumeFromRunId` for traceability.
+20. Runner emits typed events for run lifecycle, steps, model stream chunks, tool calls, and completion.
+21. DeepSeek provider can stream token chunks and still return accumulated final content for JSON parsing.
+22. Web uses SSE to render live events; CLI uses the same events through the direct runner callback.
 
 Debugging uses the official Next.js 16 `next dev --inspect` path. Start `npm run dev:inspect:break`, attach VS Code with `Attach Next.js Server (9229)`, and run `npm run debug:check` to verify that the guarded `debugger` statement in `src/app/api/agent/route.ts` is reachable before testing normal source breakpoints.
 
@@ -265,7 +273,7 @@ Do not build yet:
 
 - full-screen terminal UI framework
 - model-suggested arbitrary shell execution
-- token-level provider streaming
+- model-generated arbitrary shell execution
 
 ## V0.7 Completed
 
@@ -284,7 +292,7 @@ Do not build yet:
 
 - arbitrary shell execution from model output
 - full transcript replay
-- true token-level provider streaming
+- full-screen TUI renderer
 
 ## V0.8 Completed
 
@@ -302,8 +310,26 @@ Do not build yet:
 
 - full transcript replay
 - arbitrary shell execution from model output
-- token-level streaming from DeepSeek
 - full-screen TUI renderer
+
+## V0.9 Completed
+
+Theme: shared event stream and provider token streaming.
+
+Built:
+
+- Expanded `AgentRunEvent` into a typed event bus for run lifecycle, model stream, token chunks, tool calls, and completion.
+- Added DeepSeek SSE token streaming while preserving accumulated final content for JSON parsing.
+- Added `POST /api/agent/stream` for browser/TUI-style Server-Sent Events.
+- Updated CLI `--stream` to enable provider streaming when DeepSeek is configured.
+- Added Web live-run rendering for agent events and streamed model text.
+
+Do not build yet:
+
+- full-screen TUI renderer
+- arbitrary shell execution from model output
+- context budget controls
+- full transcript replay
 
 ## Safety Rules
 
@@ -321,7 +347,7 @@ Use this prompt when starting the next version:
 ```txt
 You are continuing DeepSeek TUI Demo.
 
-Goal: implement V0.9, token streaming and the first TUI event-flow spike for a macOS-first coding-agent learning project built with Next.js and TypeScript.
+Goal: implement V0.10, a first full-screen TUI renderer spike for a macOS-first coding-agent learning project built with Next.js and TypeScript.
 
 Read first:
 - docs/DEVELOPMENT_CONTEXT.md
@@ -334,6 +360,7 @@ Read first:
 - src/lib/agent/validation.ts
 - src/lib/agent/run-store.ts
 - src/lib/agent/resume.ts
+- src/app/api/agent/stream/route.ts
 - src/lib/agent/workspace.ts
 - src/cli/agent.ts
 
@@ -343,10 +370,11 @@ Constraints:
 - Keep the browser UI and CLI working.
 - Keep the existing read-only tools, including git_status.
 - Keep CLI/Web resume compatible through `resumeFromRunId`.
+- Reuse the V0.9 Agent Event Bus instead of inventing a separate TUI protocol.
 - Keep human approval before writes.
 - Never execute model-suggested arbitrary commands.
 - Reuse the existing runner, run store, resume, patch, and validation modules.
-- Add provider-level token streaming or an event adapter that can later feed a real TUI.
+- Build only the smallest useful TUI surface: run input, live events, recent run selection, and safe patch/validation affordances.
 - Keep validation commands whitelist-only.
 - Do not store API keys or full hidden reasoning.
 - Update README through npm run readme:generate.
