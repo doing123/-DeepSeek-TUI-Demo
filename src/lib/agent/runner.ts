@@ -21,6 +21,7 @@ import {
   buildProtocolRepairMessage,
   buildToolResultMessage
 } from "./prompts";
+import { previewPatchProposal } from "./patches";
 import {
   describeToolPolicy,
   filterToolsByPolicy,
@@ -42,6 +43,7 @@ import type {
   AgentStep,
   ModelProtocolError,
   ModelProtocolErrorCode,
+  PatchDiffPreview,
   ProtocolRepairPolicy,
   ToolPolicySnapshot,
   ToolCall,
@@ -246,6 +248,11 @@ export async function runCodingAgent({
     const parsed = parseModelResponse(completion.content);
 
     if (parsed.type === "final") {
+      const answer = applyToolPolicyToAnswer(parsed.answer, toolPolicy);
+      const patchPreview = answer.patchProposal
+        ? await previewPatchProposal(workspaceRoot, answer.patchProposal)
+        : undefined;
+
       return completeRunResult({
         goal,
         resumeFromRunId,
@@ -258,7 +265,8 @@ export async function runCodingAgent({
         protocolErrors,
         toolPolicy,
         toolCallCount,
-        answer: applyToolPolicyToAnswer(parsed.answer, toolPolicy),
+        answer,
+        patchPreview,
         rawText: parsed.rawText
       }, onEvent);
     }
@@ -460,6 +468,7 @@ function buildRunResult({
   toolPolicy,
   toolCallCount,
   answer,
+  patchPreview,
   rawText
 }: {
   goal: string;
@@ -475,6 +484,7 @@ function buildRunResult({
   toolPolicy: ToolPolicySnapshot;
   toolCallCount: number;
   answer: AgentAnswer;
+  patchPreview?: PatchDiffPreview;
   rawText?: string;
 }): AgentRunResult {
   return {
@@ -495,6 +505,7 @@ function buildRunResult({
     protocolRepairPolicy,
     protocolRepairCount,
     protocolErrors,
+    patchPreview,
     toolPolicy,
     toolCallCount,
     answer,
@@ -547,15 +558,16 @@ function buildOfflineAnswer(
   toolPolicy: ToolPolicySnapshot
 ): AgentAnswer {
   return {
-    title: "协议修复能力已就绪",
+    title: "补丁 diff 审查能力已就绪",
     summary:
-      "当前运行在离线模式。V0.14 已经具备只读工具循环、结构化补丁提案、人工确认后的安全应用入口、运行历史、终端 CLI/TUI、续接上下文、Agent Event Bus、DeepSeek token streaming、上下文预算、上下文选择、可配置工具策略和模型协议修复；配置 DEEPSEEK_API_KEY 后模型可以通过 CLI、TUI 或 Web 流式输出。",
+      "当前运行在离线模式。V0.15 已经具备只读工具循环、结构化补丁提案、补丁 diff 审查、人工确认后的安全应用入口、运行历史、终端 CLI/TUI、续接上下文、Agent Event Bus、DeepSeek token streaming、上下文预算、上下文选择、可配置工具策略和模型协议修复；配置 DEEPSEEK_API_KEY 后模型可以通过 CLI、TUI 或 Web 流式输出。",
     plan: [
       "把 Web UI 作为任务入口，收集用户的编码目标。",
       `服务端先索引当前工作区的 ${fileCount} 个文本文件，再选择 ${selectedFileCount} 个初始上下文候选。`,
       "模型通过严格 JSON 请求只读工具，服务端执行后把结果回填。",
       "模型在信息足够时输出结构化 final answer，可附带 patchProposal。",
       "用户在 UI 中审查 patchProposal 后，点击确认才会写入文件。",
+      "runner 会在写入前生成 patchPreview，展示增删行数、风险标签和紧凑 diff 片段。",
       "也可以通过 npm run agent -- \"目标\" 在终端里运行同一套 agent 内核。",
       "终端可通过 --stream 查看高层步骤事件，通过 --apply 审批补丁，通过 --validate 运行白名单验证。",
       "CLI 和 Web 都可以选择历史 run，把上一轮摘要、计划、风险、补丁元信息和验证结果作为本轮上下文。",
@@ -579,13 +591,14 @@ function buildOfflineAnswer(
       "docs/CONTEXT_BUDGET.md",
       "docs/CONTEXT_SELECTION.md",
       "docs/MODEL_PROTOCOL.md",
+      "docs/PATCH_DIFF.md",
       "src/app/api/agent/stream/route.ts"
     ],
     proposedChanges: [
-      "V0.15 可以继续做补丁 diff 预览，让 patchProposal 应用前的变化更接近真实 coding agent。"
+      "V0.16 可以继续做补丁应用后的验证闭环，把验证结果写回 run history 并带入下一轮 resume。"
     ],
     risks: [
-      "当前版本只读仓库，不会自动修改文件。",
+      "当前版本默认不会自动修改文件，所有 patchProposal 写入仍需要人工确认。",
       "上下文截断很简单，大仓库需要索引、检索和 token 预算。",
       `当前工具边界：${describeToolBoundaries(READ_ONLY_TOOL_DEFINITIONS)}`,
       `当前工具策略：${describeToolPolicy(toolPolicy)}`,

@@ -6,7 +6,26 @@ All notable project changes are tracked here.
 
 ### Notes
 
-- Next planned focus: patch diff preview and clearer write-risk review.
+- Next planned focus: validation loop after patch application.
+
+## 0.15.0 - 2026-05-22
+
+### Added
+
+- Added server-side patch diff preview generation for `patchProposal`.
+- Added `PatchDiffPreview` metadata to agent run results and saved run records.
+- Added additions/deletions, compact diff lines, and risk tags for proposed patch files.
+- Added patch diff display in CLI, Web, and TUI outputs.
+- Added `docs/PATCH_DIFF.md` for the current write-review flow.
+
+### Changed
+
+- Runner now computes patch previews before returning final answers that include `patchProposal`.
+- CLI patch approval prompt now includes diff line counts when available.
+- Saved patch metadata now includes additions/deletions and diff errors.
+- Workspace indexing now ignores `.agent-runs` so local run history does not pollute prompt context.
+- Updated handoff context, project planning, and generated architecture snapshots for V0.15.
+- Bumped project version to `0.15.0`.
 
 ## 0.14.0 - 2026-05-22
 

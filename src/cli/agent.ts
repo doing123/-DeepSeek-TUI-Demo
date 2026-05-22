@@ -13,6 +13,7 @@ import type {
   AgentRunResult,
   AgentRunSummary,
   PatchApplyResult,
+  PatchDiffPreview,
   StoredAgentRunResult,
   ValidationCommandName,
   ValidationRunResult
@@ -317,7 +318,7 @@ async function maybeApplyPatch(
     };
   }
 
-  const approved = await confirmPatchApply(proposal.files.length, options);
+  const approved = await confirmPatchApply(proposal.files.length, options, result.patchPreview);
 
   if (!approved) {
     return {
@@ -332,7 +333,11 @@ async function maybeApplyPatch(
   return applyPatchProposal(workspaceRoot, proposal);
 }
 
-async function confirmPatchApply(fileCount: number, options: CliOptions) {
+async function confirmPatchApply(
+  fileCount: number,
+  options: CliOptions,
+  preview?: PatchDiffPreview
+) {
   if (options.yes) {
     return true;
   }
@@ -347,8 +352,11 @@ async function confirmPatchApply(fileCount: number, options: CliOptions) {
   });
 
   try {
+    const diffText = preview
+      ? ` (+${preview.totalAdditions}/-${preview.totalDeletions})`
+      : "";
     const answer = await prompt.question(
-      `Apply patch proposal for ${fileCount} file(s)? Type "apply" to continue: `
+      `Apply patch proposal for ${fileCount} file(s)${diffText}? Type "apply" to continue: `
     );
     return answer.trim() === "apply";
   } finally {
@@ -580,6 +588,20 @@ function printPatchProposal(result: AgentRunResult | StoredAgentRunResult) {
   console.log(`- ${proposal.summary}`);
   for (const file of proposal.files) {
     console.log(`- ${file.action}: ${file.path}${file.explanation ? ` - ${file.explanation}` : ""}`);
+  }
+
+  if (result.patchPreview) {
+    console.log(`Diff: +${result.patchPreview.totalAdditions} / -${result.patchPreview.totalDeletions}`);
+    for (const file of result.patchPreview.files) {
+      console.log(`- ${file.path} +${file.additions}/-${file.deletions} risks=${file.risks.join(",")}`);
+      for (const line of file.previewLines.slice(0, 12)) {
+        console.log(`  ${line}`);
+      }
+    }
+
+    for (const error of result.patchPreview.errors) {
+      console.log(`- diff warning: ${error}`);
+    }
   }
 }
 

@@ -17,6 +17,10 @@ and the top selected files with scores and reasons.
 V0.14 adds model protocol repair output. CLI runs print the active repair policy,
 repair attempt count, and protocol errors when the model response needs repair.
 
+V0.15 adds patch diff review output. When a returned `patchProposal` can be
+previewed, CLI output prints total additions/deletions, per-file risk tags, and a
+compact diff snippet before any write approval prompt.
+
 ## Usage
 
 ```bash
@@ -83,8 +87,9 @@ npm run agent -- --json "查看当前仓库有哪些风险"
 - `--continue <run-id>` reads a saved run and passes a compact summary of its
   visible result, patch metadata, and validation history into the next prompt.
 - Patch proposals can be applied from the terminal with `--apply`, but only after
-  explicit user approval. The CLI reuses the same path and action validation as
-  the browser patch API.
+  explicit user approval. The approval prompt includes diff totals when the
+  runner produced a preview, and the CLI reuses the same path and action
+  validation as the browser patch API.
 - Validation commands are still whitelist-only: `typecheck`, `build`, or `all`.
 - Git context is exposed through the fixed read-only `git_status` tool.
 - Tool policy is controlled by `AGENT_ALLOWED_READ_TOOLS` and
@@ -94,3 +99,5 @@ npm run agent -- --json "查看当前仓库有哪些风险"
   through read-only tools.
 - Model protocol repair is controlled by `AGENT_PROTOCOL_REPAIR_MAX_ATTEMPTS`
   and `AGENT_PROTOCOL_REPAIR_MAX_RAW_LENGTH`.
+- Patch diff review is generated locally from the full-file `patchProposal`; it
+  is review metadata only and never writes files by itself.

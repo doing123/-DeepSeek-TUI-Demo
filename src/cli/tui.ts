@@ -319,6 +319,10 @@ function render(state: TuiState) {
       lines.push(color(`Patch: ${state.result.answer.patchProposal.summary}`, "cyan"));
     }
 
+    if (state.result.patchPreview) {
+      lines.push(color(`Diff: +${state.result.patchPreview.totalAdditions}/-${state.result.patchPreview.totalDeletions}`, "cyan"));
+    }
+
     if (state.result.toolPolicy) {
       lines.push(color(`Policy: ${describeToolPolicy(state.result.toolPolicy)}`, "dim"));
     }

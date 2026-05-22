@@ -517,6 +517,10 @@ button {
   margin-top: 14px;
 }
 
+.patch-diff-summary {
+  margin-top: 10px;
+}
+
 .patch-file {
   display: grid;
   gap: 10px;
@@ -532,6 +536,11 @@ button {
   align-items: center;
   flex-wrap: wrap;
   overflow-wrap: anywhere;
+}
+
+.patch-diff {
+  display: grid;
+  gap: 8px;
 }
 
 .apply-result {

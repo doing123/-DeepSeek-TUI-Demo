@@ -109,6 +109,7 @@ function toStoredRunResult(result: AgentRunResult): StoredAgentRunResult {
     protocolRepairPolicy: result.protocolRepairPolicy,
     protocolRepairCount: result.protocolRepairCount,
     protocolErrors: result.protocolErrors,
+    patchPreview: result.patchPreview,
     toolCallCount: result.toolCallCount,
     answer
   };
@@ -124,9 +125,14 @@ function toPatchProposalMeta(result: AgentRunResult): PatchProposalMeta | undefi
   return {
     summary: proposal.summary,
     fileCount: proposal.files.length,
+    totalAdditions: result.patchPreview?.totalAdditions,
+    totalDeletions: result.patchPreview?.totalDeletions,
+    diffErrors: result.patchPreview?.errors,
     files: proposal.files.map((file) => ({
       path: file.path,
       action: file.action,
+      additions: result.patchPreview?.files.find((previewFile) => previewFile.path === file.path)?.additions,
+      deletions: result.patchPreview?.files.find((previewFile) => previewFile.path === file.path)?.deletions,
       explanation: file.explanation
     }))
   };

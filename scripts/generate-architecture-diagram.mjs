@@ -51,7 +51,7 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     {
       id: "runner",
       label: "Agent Runner",
-      detail: "context selection / protocol repair / tool policy",
+      detail: "context selection / protocol repair / patch diff",
       x: 790,
       y: 170,
       w: 300,
@@ -120,8 +120,8 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     },
     {
       id: "safety",
-      label: "Validation Commands",
-      detail: "typecheck / build / 白名单执行",
+      label: "Patch Review + Validation",
+      detail: "diff preview / typecheck / build / 白名单执行",
       x: 1000,
       y: 535,
       w: 420,
@@ -227,48 +227,41 @@ function nextRoadmapText(roadmap, version) {
 }
 
 function pickFeatureHighlights(features) {
-  const important = features.filter((feature) =>
-    [
-      "服务端 API",
-      "只读工具循环",
-      "终端入口",
-      "TUI 入口",
-      "CLI 状态视图",
-      "CLI 流式 trace",
-      "CLI 运行历史",
-      "CLI 恢复上下文",
-      "TUI 最近运行选择",
-      "TUI 人工审批",
-      "终端补丁审批",
-      "流式 API",
-      "DeepSeek streaming",
-      "Agent Event Bus",
-      "上下文预算",
-      "上下文选择",
-      "文件优先级",
-      "模型协议",
-      "协议修复",
-      "协议错误视图",
-      "工具边界",
-      "工具策略",
-      "Patch 策略",
-      "TUI 工具面板",
-      "实时运行视图",
-      "Git 只读上下文",
-      "验证命令串联",
-      "API 续接参数",
-      "工具 trace",
-      "补丁预览",
-      "人工审批",
-      "运行记录",
-      "Web 续接入口",
-      "验证关联",
-      "版本架构图",
-      "自动文档生成"
-    ].some((keyword) => feature.includes(keyword))
-  );
+  const keywords = [
+    "Patch diff",
+    "写入风险视图",
+    "协议修复",
+    "上下文选择",
+    "工具策略",
+    "TUI 人工审批",
+    "Agent Event Bus",
+    "验证命令串联",
+    "终端补丁审批",
+    "服务端 API",
+    "只读工具循环",
+    "版本架构图"
+  ];
+  const selected = [];
 
-  return important.slice(0, 8);
+  for (const keyword of keywords) {
+    const feature = features.find((item) => item.includes(keyword) && !selected.includes(item));
+
+    if (feature) {
+      selected.push(feature);
+    }
+  }
+
+  for (const feature of features) {
+    if (selected.length >= 8) {
+      break;
+    }
+
+    if (!selected.includes(feature)) {
+      selected.push(feature);
+    }
+  }
+
+  return selected.slice(0, 8);
 }
 
 function escapeXml(value) {

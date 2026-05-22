@@ -10,6 +10,10 @@ many indexed files were selected for the first prompt map.
 V0.14 adds the active model protocol repair policy and repair count, so malformed
 model responses show up as a visible agent step instead of a mysterious stop.
 
+V0.15 adds a compact patch diff line in the result area. When a run returns a
+patch preview, the TUI shows `Diff: +added/-removed` before the user presses `a`
+to apply the proposal.
+
 ```bash
 npm run tui
 npm run tui -- "查看当前仓库状态"
@@ -63,3 +67,9 @@ The TUI renders protocol repair through the same event stream:
 - The result area shows the configured repair policy and repair count.
 
 Tune it with `AGENT_PROTOCOL_REPAIR_MAX_ATTEMPTS`.
+
+## Patch Diff
+
+The TUI does not render a full file-by-file diff yet. It shows the run-level
+addition/deletion summary from `patchPreview`, while `a` still routes through the
+same safe patch application module and human approval boundary.

@@ -8,6 +8,7 @@ import type {
   AgentRunSummary,
   ContextSelection,
   PatchApplyResult,
+  PatchDiffPreview,
   PatchProposal,
   ProtocolRepairPolicy,
   ToolPolicySnapshot,
@@ -426,7 +427,7 @@ function AgentResultView({
         </section>
 
         {result.answer.patchProposal ? (
-          <PatchPreview proposal={result.answer.patchProposal} />
+          <PatchPreview proposal={result.answer.patchProposal} diff={result.patchPreview} />
         ) : null}
 
         {result.rawText ? (
@@ -584,7 +585,13 @@ function AgentResultView({
 
 // Human approval boundary for writes. The model can propose file changes, but
 // this component requires a user confirmation before calling the apply API.
-function PatchPreview({ proposal }: { proposal: PatchProposal }) {
+function PatchPreview({
+  proposal,
+  diff
+}: {
+  proposal: PatchProposal;
+  diff?: PatchDiffPreview;
+}) {
   const [isApplying, setIsApplying] = useState(false);
   const [applyResult, setApplyResult] = useState<PatchApplyResult | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
@@ -632,6 +639,15 @@ function PatchPreview({ proposal }: { proposal: PatchProposal }) {
         <div>
           <h3>补丁预览</h3>
           <p className="summary">{proposal.summary}</p>
+          {diff ? (
+            <div className="tag-row patch-diff-summary">
+              <span className={diff.ok ? "tag tag--ok" : "tag tag--warn"}>
+                {diff.ok ? "diff ready" : "diff warning"}
+              </span>
+              <span className="tag tag--neutral">+{diff.totalAdditions}</span>
+              <span className="tag tag--neutral">-{diff.totalDeletions}</span>
+            </div>
+          ) : null}
         </div>
         <button
           className="primary"
@@ -651,10 +667,20 @@ function PatchPreview({ proposal }: { proposal: PatchProposal }) {
               <strong>{file.path}</strong>
             </div>
             {file.explanation ? <p className="step-meta">{file.explanation}</p> : null}
+            {diff?.files.find((item) => item.path === file.path) ? (
+              <PatchFileDiffView diff={diff.files.find((item) => item.path === file.path)!} />
+            ) : null}
             <pre className="code-block">{previewContent(file.content)}</pre>
           </article>
         ))}
       </div>
+
+      {diff?.errors.length ? (
+        <div className="apply-result">
+          <strong>Diff warnings</strong>
+          <p>{diff.errors.join("; ")}</p>
+        </div>
+      ) : null}
 
       {applyResult ? (
         <div className={applyResult.ok ? "apply-result apply-result--ok" : "apply-result"}>
@@ -668,6 +694,23 @@ function PatchPreview({ proposal }: { proposal: PatchProposal }) {
 
       {applyError ? <div className="apply-result">{applyError}</div> : null}
     </section>
+  );
+}
+
+function PatchFileDiffView({ diff }: { diff: PatchDiffPreview["files"][number] }) {
+  return (
+    <div className="patch-diff">
+      <div className="tag-row">
+        <span className="tag tag--neutral">+{diff.additions}</span>
+        <span className="tag tag--neutral">-{diff.deletions}</span>
+        {diff.risks.map((risk) => (
+          <span className="tag tag--warn" key={risk}>
+            {risk}
+          </span>
+        ))}
+      </div>
+      <pre className="trace-code">{diff.previewLines.join("\n")}</pre>
+    </div>
   );
 }
 

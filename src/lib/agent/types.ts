@@ -144,6 +144,30 @@ export type PatchProposal = {
   files: PatchFileChange[];
 };
 
+export type PatchFileDiffPreview = {
+  path: string;
+  action: PatchAction;
+  exists: boolean;
+  beforeLineCount: number;
+  afterLineCount: number;
+  additions: number;
+  deletions: number;
+  previewLines: string[];
+  risks: string[];
+  explanation?: string;
+};
+
+export type PatchDiffPreview = {
+  summary: string;
+  generatedAt: string;
+  ok: boolean;
+  fileCount: number;
+  totalAdditions: number;
+  totalDeletions: number;
+  files: PatchFileDiffPreview[];
+  errors: string[];
+};
+
 export type PatchApplyResult = {
   ok: boolean;
   appliedFiles: string[];
@@ -167,9 +191,14 @@ export type ValidationRunResult = {
 export type PatchProposalMeta = {
   summary: string;
   fileCount: number;
+  totalAdditions?: number;
+  totalDeletions?: number;
+  diffErrors?: string[];
   files: Array<{
     path: string;
     action: PatchAction;
+    additions?: number;
+    deletions?: number;
     explanation?: string;
   }>;
 };
@@ -225,6 +254,7 @@ export type AgentRunResult = {
   protocolRepairPolicy?: ProtocolRepairPolicy;
   protocolRepairCount?: number;
   protocolErrors?: ModelProtocolError[];
+  patchPreview?: PatchDiffPreview;
   toolCallCount: number;
   answer: AgentAnswer;
   rawText?: string;

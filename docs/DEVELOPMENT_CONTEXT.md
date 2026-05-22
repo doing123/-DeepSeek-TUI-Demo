@@ -62,9 +62,9 @@ Observed ideas to learn from:
 
 ## Current State
 
-Version: V0.14
+Version: V0.15
 
-The current implementation is a Node.js 22 + Next.js 16 learning workbench plus a CLI and a dependency-free TUI spike. It has read-only tools, explicit context budgets, heuristic context selection, configurable tool policy, model protocol repair, human-approved patch application, whitelist validation commands, local run history, Agent Event Bus, DeepSeek token streaming, terminal approval flow, and simple resume.
+The current implementation is a Node.js 22 + Next.js 16 learning workbench plus a CLI and a dependency-free TUI spike. It has read-only tools, explicit context budgets, heuristic context selection, configurable tool policy, model protocol repair, server-side patch diff preview, human-approved patch application, whitelist validation commands, local run history, Agent Event Bus, DeepSeek token streaming, terminal approval flow, and simple resume.
 
 Implemented:
 
@@ -74,7 +74,7 @@ Implemented:
 - Agent runner with high-level trace steps and typed event bus events.
 - Agent runner records an active context budget for each run.
 - Agent runner records an active context selection snapshot for each run.
-- Workspace text-file index with ignored heavy directories and real `.env` files.
+- Workspace text-file index with ignored `.agent-runs`, heavy directories, and real `.env` files.
 - `AGENT_CONTEXT_*` environment variables control file indexing, file reads, text search, and tool output truncation.
 - `AGENT_CONTEXT_SELECTED_MAX_FILES` controls how many scored files enter the initial prompt file map.
 - `src/lib/agent/context-selection.ts` scores likely-relevant files by goal terms, path hints, concepts, module type, and size.
@@ -87,6 +87,9 @@ Implemented:
 - Runner classifies model protocol failures as `non_json`, `top_level_not_object`, `missing_type`, or `invalid_tool_call`.
 - Runner can extract the first JSON object from prose-wrapped model output before using the repair path.
 - CLI, Web, TUI, and saved run records expose protocol repair policy, repair counts, and protocol errors.
+- `src/lib/agent/patches.ts` can turn a structured `patchProposal` into a local diff preview before any write.
+- Run results can include `patchPreview` with total additions/deletions, per-file risks, compact diff lines, and path/action warnings.
+- CLI, Web, TUI, and saved run records expose patch diff counts and write-risk metadata.
 - Read-only `list_files`, `read_file`, `search_text`, and `git_status` tools.
 - Tool definitions include `category`, `risk`, and `approvalRequired` so callable boundaries are visible to prompt, code, and docs.
 - `src/lib/agent/tool-policy.ts` turns environment variables into a run-level tool policy snapshot.
@@ -168,6 +171,7 @@ Important files:
 - `docs/CONTEXT_SELECTION.md`
 - `docs/MODEL_PROTOCOL.md`
 - `docs/TOOL_POLICY.md`
+- `docs/PATCH_DIFF.md`
 
 ## Architecture Direction
 
@@ -186,7 +190,7 @@ UI / CLI
   -> Generated docs + architecture snapshot
 ```
 
-The V0.14 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 validation, V0.5 run history, V0.6 terminal shell, V0.7 CLI streaming/approval, V0.8 cross-surface continuation, V0.9 shared event stream, V0.10 full-screen terminal renderer, V0.11 context budgets/tool boundaries, V0.12 local tool policy, V0.13 context selection, and adds a visible model protocol repair path:
+The V0.15 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 validation, V0.5 run history, V0.6 terminal shell, V0.7 CLI streaming/approval, V0.8 cross-surface continuation, V0.9 shared event stream, V0.10 full-screen terminal renderer, V0.11 context budgets/tool boundaries, V0.12 local tool policy, V0.13 context selection, V0.14 model protocol repair, and adds a visible patch diff review path:
 
 1. User submits a goal.
 2. Agent creates a turn state.
@@ -195,33 +199,35 @@ The V0.14 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 valid
 5. Tool output is appended to the transcript.
 6. Model either requests another tool or returns a final answer.
 7. Final answers may include a `patchProposal` with structured file changes.
-8. UI shows patch preview and requires explicit user confirmation.
-9. Server validates paths/actions before writing files.
-10. User can run fixed validation commands and inspect output.
-11. Server saves lightweight run records under `.agent-runs`.
-12. UI and CLI can list recent runs and load a saved result.
-13. CLI can run the same agent runner directly without starting the Next dev server.
-14. CLI can print high-level step events as they happen.
-15. CLI can ask for explicit approval before applying patch proposals.
-16. CLI can run fixed validation commands after an agent run or patch application.
-17. UI or CLI can select a saved run to continue.
-18. Resume context is rebuilt from user-visible summaries, patch metadata, and validation records.
-19. The new run preserves the user's fresh goal and stores `resumeFromRunId` for traceability.
-20. Runner emits typed events for run lifecycle, steps, model stream chunks, tool calls, and completion.
-21. DeepSeek provider can stream token chunks and still return accumulated final content for JSON parsing.
-22. Web uses SSE to render live events; CLI uses the same events through the direct runner callback.
-23. TUI uses the same direct runner callback to render events in an alternate-screen terminal layout.
-24. TUI can continue from a selected saved run and apply a returned patch proposal through the existing safe patch module.
-25. Runner applies a central context budget before workspace indexing and tool execution.
-26. Runner scores indexed files by current goal, path, module hints, and size.
-27. Prompt construction receives only the selected initial file map plus selection metadata.
-28. Runner parses model output against the `tool_call`/`final` JSON protocol.
-29. If parsing fails, runner records a typed protocol error and can send one compact repair prompt.
-30. Tool definitions expose category, risk, and approval metadata; current model-callable tools remain low-risk read-only tools.
-31. Runner builds a tool policy snapshot from `AGENT_ALLOWED_READ_TOOLS` and `AGENT_PATCH_PROPOSAL`.
-32. Prompt construction exposes only policy-allowed tools.
-33. Runner enforces the same policy before executing tool calls.
-34. CLI, Web, and TUI show context selection, protocol repair, and policy metadata so users can understand why a run had a smaller prompt/tool surface or needed repair.
+8. Runner validates the proposal through the safe patch module and builds a compact diff preview.
+9. UI, CLI, and TUI show diff counts and write-risk metadata before any write.
+10. UI shows patch preview and requires explicit user confirmation.
+11. Server validates paths/actions again before writing files.
+12. User can run fixed validation commands and inspect output.
+13. Server saves lightweight run records under `.agent-runs`.
+14. UI and CLI can list recent runs and load a saved result.
+15. CLI can run the same agent runner directly without starting the Next dev server.
+16. CLI can print high-level step events as they happen.
+17. CLI can ask for explicit approval before applying patch proposals.
+18. CLI can run fixed validation commands after an agent run or patch application.
+19. UI or CLI can select a saved run to continue.
+20. Resume context is rebuilt from user-visible summaries, patch metadata, diff metadata, and validation records.
+21. The new run preserves the user's fresh goal and stores `resumeFromRunId` for traceability.
+22. Runner emits typed events for run lifecycle, steps, model stream chunks, tool calls, and completion.
+23. DeepSeek provider can stream token chunks and still return accumulated final content for JSON parsing.
+24. Web uses SSE to render live events; CLI uses the same events through the direct runner callback.
+25. TUI uses the same direct runner callback to render events in an alternate-screen terminal layout.
+26. TUI can continue from a selected saved run and apply a returned patch proposal through the existing safe patch module.
+27. Runner applies a central context budget before workspace indexing and tool execution.
+28. Runner scores indexed files by current goal, path, module hints, and size.
+29. Prompt construction receives only the selected initial file map plus selection metadata.
+30. Runner parses model output against the `tool_call`/`final` JSON protocol.
+31. If parsing fails, runner records a typed protocol error and can send one compact repair prompt.
+32. Tool definitions expose category, risk, and approval metadata; current model-callable tools remain low-risk read-only tools.
+33. Runner builds a tool policy snapshot from `AGENT_ALLOWED_READ_TOOLS` and `AGENT_PATCH_PROPOSAL`.
+34. Prompt construction exposes only policy-allowed tools.
+35. Runner enforces the same policy before executing tool calls.
+36. CLI, Web, and TUI show context selection, protocol repair, patch diff, and policy metadata so users can understand why a run had a smaller prompt/tool surface, needed repair, or proposed risky writes.
 
 Debugging uses the official Next.js 16 `next dev --inspect` path. Start `npm run dev:inspect:break`, attach VS Code with `Attach Next.js Server (9229)`, and run `npm run debug:check` to verify that the guarded `debugger` statement in `src/app/api/agent/route.ts` is reachable before testing normal source breakpoints.
 
@@ -474,8 +480,29 @@ Do not build yet:
 
 - multi-step autonomous repair loops
 - arbitrary shell execution from model output
-- diff-based patch preview
 - full transcript replay
+
+## V0.15 Completed
+
+Theme: patch diff preview and write-risk review.
+
+Built:
+
+- `PatchDiffPreview` and per-file diff metadata in `src/lib/agent/types.ts`.
+- `previewPatchProposal` in `src/lib/agent/patches.ts`, reusing the same path/action checks as patch application.
+- Runner-side diff generation after a final answer includes an allowed `patchProposal`.
+- Run history metadata for total additions/deletions, per-file additions/deletions, and diff warnings.
+- Web patch preview with run-level diff status, per-file risk tags, and compact changed-line snippets.
+- CLI patch proposal output with diff totals, per-file risk tags, and preview snippets before approval.
+- TUI result summary showing run-level diff totals before the user applies a patch.
+- `docs/PATCH_DIFF.md` as the patch review handoff note.
+
+Do not build yet:
+
+- automatic patch application without human approval
+- model-suggested arbitrary shell execution
+- full unified diff parser or partial hunk application
+- validation loop that automatically runs after applying a patch
 
 ## Safety Rules
 
@@ -493,7 +520,7 @@ Use this prompt when starting the next version:
 ```txt
 You are continuing DeepSeek TUI Demo.
 
-Goal: implement V0.15, patch diff preview and clearer write-risk review for a macOS-first coding-agent learning project built with Next.js and TypeScript.
+Goal: implement V0.16, validation loop after patch application for a macOS-first coding-agent learning project built with Next.js and TypeScript.
 
 Read first:
 - docs/DEVELOPMENT_CONTEXT.md
@@ -518,6 +545,7 @@ Read first:
 - docs/CONTEXT_SELECTION.md
 - docs/MODEL_PROTOCOL.md
 - docs/TOOL_POLICY.md
+- docs/PATCH_DIFF.md
 
 Constraints:
 - Keep DeepSeek as the first provider.
@@ -530,11 +558,14 @@ Constraints:
 - Keep the V0.12 tool policy controls working.
 - Keep the V0.13 context selection controls working.
 - Keep the V0.14 protocol repair controls working.
+- Keep the V0.15 patch diff preview controls working.
 - Keep human approval before writes.
 - Never execute model-suggested arbitrary commands.
 - Reuse the existing runner, run store, resume, patch, and validation modules.
-- Add a diff preview for patchProposal before applying writes.
-- Show added/removed line counts and changed file summaries in Web and CLI.
+- Add an optional validation loop after a user-approved patch apply.
+- Let Web, CLI, and TUI surface validation outcome next to the run that produced the patch.
+- Store post-apply validation records in run history and make resume context include the conclusion.
+- Keep failures compact: show command, exit code, duration, and trimmed stdout/stderr.
 - Keep patch application behind explicit human approval.
 - Keep validation commands whitelist-only.
 - Do not store API keys or full hidden reasoning.

@@ -3,6 +3,7 @@ import path from "path";
 import type { WorkspaceFile, WorkspaceSearchMatch, WorkspaceSnapshot } from "./types";
 
 const ignoredNames = new Set([
+  ".agent-runs",
   ".git",
   ".next",
   ".turbo",
