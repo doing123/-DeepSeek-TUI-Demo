@@ -30,6 +30,10 @@ agent` for the default inspect-and-propose loop, and `--mode apply` for an
 implementation-oriented run that asks the model to prefer a reviewable
 `patchProposal` when enough context is available.
 
+V0.19 adds approval profiles. Use `--approval ask|trusted-read|trusted-write`
+to label the run's trust boundary. V0.19 still keeps patch application behind
+local preview and human approval.
+
 ## Usage
 
 ```bash
@@ -58,6 +62,12 @@ Run in planning mode without patch proposals:
 
 ```bash
 npm run agent -- --mode plan "规划下一版 TUI 交互"
+```
+
+Run with an explicit approval profile:
+
+```bash
+npm run agent -- --approval trusted-read "查看当前仓库有哪些未提交改动"
 ```
 
 Run whitelisted validation commands after the agent run, or after a successful
@@ -109,6 +119,8 @@ npm run agent -- --json "查看当前仓库有哪些风险"
 - `--mode plan` disables patch proposals for the run. `--mode apply` keeps the
   same human-approval boundary but tells the model to prefer a concrete
   `patchProposal` when the task and context are clear.
+- `--approval trusted-write` records a future trusted-write intent, but V0.19
+  still requires explicit local approval before any patch is applied.
 - Validation commands are still whitelist-only: `typecheck`, `build`, or `all`.
   With `--apply`, they are skipped if the patch is not applied.
 - Git context is exposed through the fixed read-only `git_status` tool.

@@ -22,7 +22,7 @@ Open http://localhost:3000 and run a goal from the workbench.
 
 ## Architecture
 
-![Architecture v0.18.0](docs/architecture/architecture-v0.18.0.svg)
+![Architecture v0.19.0](docs/architecture/architecture-v0.19.0.svg)
 
 - **Next.js App**: 负责输入任务、展示 agent trace、展示实时事件、结构化建议和续接历史运行。
 - **CLI/TUI Shell**: 通过 npm run agent 和 npm run tui 复用 agent runner，提供终端入口、事件流、token 输出、运行历史回看和续接。
@@ -34,6 +34,7 @@ Open http://localhost:3000 and run a goal from the workbench.
 - **Patch Diff Preview**: 在人工审批写入前，服务端计算 patchProposal 的行级摘要、风险标签和紧凑 diff 片段。
 - **Validation Loop**: 在补丁被人工应用后运行白名单验证命令，并把验证结果写回 run history 和 resume 上下文。
 - **Session Modes**: 通过 plan、agent、apply 三种模式控制本轮 agent 行为，并在 prompt、run history、CLI/TUI/Web 中保持一致。
+- **Approval Profiles**: 通过 ask、trusted-read、trusted-write 显式记录本轮信任边界，并注入 prompt、事件流、运行结果和界面。
 - **DeepSeek Provider**: 封装 OpenAI-compatible chat completions 和 SSE token streaming。
 - **Workspace Tools**: 当前支持带预算和策略限制的安全只读扫描、文件读取、文本搜索和 Git 状态读取，后续扩展 write_patch、run_command。
 - **README Generator**: 从项目规划数据和 package scripts 生成 README，并由 pre-commit hook 自动执行。
@@ -82,6 +83,9 @@ Architecture snapshots are stored in `docs/architecture/` for version-to-version
 - TUI 运行筛选：按 f 在 all、plan、agent、apply 历史运行之间切换。
 - TUI 会话续接：继续历史 run 时继承其 sessionMode，并显示工具、补丁、验证和续接来源。
 - DeepSeek-TUI 差距分析：docs/DEEPSEEK_TUI_GAP_ANALYSIS.md 记录与真实 DeepSeek-TUI 的主要差距和十版路线。
+- 审批配置：runner 支持 ask、trusted-read、trusted-write 三种 approval profile，并写入 prompt、run result、事件流和历史摘要。
+- 审批配置界面：Web、CLI、TUI 都可以选择并展示 approval profile，TUI 可按 p 切换。
+- 信任边界：trusted-write 在 V0.19 只是显式元数据，补丁应用仍需要人工预览和确认。
 - 离线模式：没有 API key 时仍能返回本地规划结果。
 - 工作区索引：忽略 .agent-runs、.git、node_modules、.next 和真实 .env 文件，只暴露文本文件路径。
 - 只读工具循环：模型可通过严格 JSON 协议请求 list_files、read_file、search_text、git_status。
@@ -148,6 +152,7 @@ Sources:
 - V0.16 把验证结果接到补丁应用之后，让 coding agent 的下一轮能看到改动是否真的通过检查。
 - V0.17 把 plan/agent/apply 模式贯穿到 prompt、运行记录和终端控制，让项目更接近 DeepSeek-TUI 的交互骨架。
 - V0.18 对照真实 DeepSeek-TUI 梳理功能差距，并让 TUI 历史运行可按模式筛选和续接。
+- V0.19 把 approval profile 从文档概念推进到运行时数据，让后续命令提案和 YOLO/trust 模式有明确边界。
 
 ## Development Context
 
@@ -164,6 +169,7 @@ Sources:
 - `docs/VALIDATION_LOOP.md`: 补丁应用后的验证闭环和 run history 写回说明。
 - `docs/SESSION_MODES.md`: plan、agent、apply 会话模式和安全边界说明。
 - `docs/TUI_SESSION.md`: TUI 会话筛选、续接和本地 turn history 说明。
+- `docs/APPROVAL_PROFILES.md`: 审批配置、信任边界和各入口使用说明。
 - `docs/DEEPSEEK_TUI_GAP_ANALYSIS.md`: 与真实 DeepSeek-TUI 的功能差距和十版后续路线。
 
 ## Roadmap

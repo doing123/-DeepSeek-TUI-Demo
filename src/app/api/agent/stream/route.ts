@@ -1,4 +1,5 @@
 import { buildResumePromptGoal } from "@/lib/agent/resume";
+import { normalizeApprovalMode } from "@/lib/agent/approval-profile";
 import { runCodingAgent } from "@/lib/agent/runner";
 import { normalizeAgentSessionMode } from "@/lib/agent/session-mode";
 import {
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
 
   const resumeRunId = readOptionalString(payload, "resumeRunId");
   const sessionMode = normalizeAgentSessionMode(readOptionalString(payload, "sessionMode"));
+  const approvalMode = normalizeApprovalMode(readOptionalString(payload, "approvalMode"));
   const resumeRecord = resumeRunId
     ? await readAgentRunRecord(process.cwd(), resumeRunId)
     : null;
@@ -54,6 +56,7 @@ export async function POST(request: Request) {
         goal,
         promptGoal,
         sessionMode,
+        approvalMode,
         resumeFromRunId: resumeRecord?.id
       });
     }
@@ -74,6 +77,7 @@ async function runAndStreamEvents({
   goal,
   promptGoal,
   sessionMode,
+  approvalMode,
   resumeFromRunId
 }: {
   controller: ReadableStreamDefaultController<Uint8Array>;
@@ -81,6 +85,7 @@ async function runAndStreamEvents({
   goal: string;
   promptGoal: string;
   sessionMode: ReturnType<typeof normalizeAgentSessionMode>;
+  approvalMode: ReturnType<typeof normalizeApprovalMode>;
   resumeFromRunId?: string;
 }) {
   try {
@@ -89,6 +94,7 @@ async function runAndStreamEvents({
       promptGoal,
       resumeFromRunId,
       sessionMode,
+      approvalMode,
       streamModel: true,
       workspaceRoot: process.cwd(),
       onEvent: (event) => sendSseEvent(controller, encoder, "agent_event", event)

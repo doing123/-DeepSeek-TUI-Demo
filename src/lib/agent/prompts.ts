@@ -1,6 +1,7 @@
 import type {
   AgentMessage,
   AgentSessionMode,
+  ApprovalProfileSnapshot,
   ModelProtocolError,
   ProtocolRepairPolicy,
   ToolDefinition,
@@ -8,6 +9,7 @@ import type {
   ToolResult,
   WorkspaceSnapshot
 } from "./types";
+import { buildApprovalProfilePrompt } from "./approval-profile";
 import { buildSessionModePrompt } from "./session-mode";
 
 export function buildCodingAgentMessages(
@@ -16,6 +18,7 @@ export function buildCodingAgentMessages(
   tools: ToolDefinition[],
   toolPolicy: ToolPolicySnapshot,
   sessionMode: AgentSessionMode,
+  approvalProfile: ApprovalProfileSnapshot,
   maxToolCalls: number
 ): AgentMessage[] {
   const toolNames = tools.map((tool) => tool.name).join("|");
@@ -34,6 +37,7 @@ export function buildCodingAgentMessages(
         "工具定义包含 category、risk、approvalRequired。当前模型只允许请求 category=read 且 approvalRequired=false 的工具。",
         "写文件、补丁应用和验证命令只能通过用户确认后的本地入口执行，不能由模型直接调用。",
         buildSessionModePrompt(sessionMode),
+        buildApprovalProfilePrompt(approvalProfile),
         `当前 tool policy：read tools=[${toolPolicy.allowedReadTools.join(", ")}]，patchProposal=${toolPolicy.patchProposal}，validation=${toolPolicy.validationCommands}。`,
         "workspace.files 是服务端按 contextSelection 选出的初始候选文件；如信息不足，应继续用 list_files/search_text/read_file 扩展上下文。",
         `最多请求 ${maxToolCalls} 次工具。信息足够时必须给 final。`,
@@ -52,6 +56,7 @@ export function buildCodingAgentMessages(
         {
           goal,
           sessionMode,
+          approvalProfile,
           workspace: {
             root: snapshot.root,
             fileCount: snapshot.fileCount,

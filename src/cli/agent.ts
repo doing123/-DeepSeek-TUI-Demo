@@ -2,6 +2,11 @@ import { readFile } from "fs/promises";
 import path from "path";
 import { createInterface } from "readline/promises";
 import { pathToFileURL } from "url";
+import {
+  describeApprovalMode,
+  getDefaultApprovalMode,
+  isApprovalMode
+} from "../lib/agent/approval-profile";
 import { describeContextBudget } from "../lib/agent/context-budget";
 import { describeContextSelection } from "../lib/agent/context-selection";
 import { describeProtocolRepairPolicy } from "../lib/agent/model-protocol";
@@ -14,6 +19,7 @@ import type {
   AgentRunResult,
   AgentRunSummary,
   AgentSessionMode,
+  ApprovalMode,
   PatchApplyResult,
   PatchDiffPreview,
   StoredAgentRunResult,
@@ -30,6 +36,7 @@ type CliOptions = {
   recent: boolean;
   recentLimit: number;
   sessionMode?: AgentSessionMode;
+  approvalMode?: ApprovalMode;
   continueRunId?: string;
   showRunId?: string;
   stream: boolean;
@@ -102,6 +109,7 @@ async function main() {
     promptGoal,
     resumeFromRunId: resumeRecord?.id,
     sessionMode,
+    approvalMode: options.approvalMode,
     streamModel: options.stream,
     workspaceRoot,
     onEvent: options.stream && !options.json ? printRunEvent : undefined
@@ -146,6 +154,7 @@ async function parseArgs(args: string[]): Promise<CliOptions> {
     recent: false,
     recentLimit: 10,
     sessionMode: undefined,
+    approvalMode: undefined,
     stream: false,
     trace: false,
     validate: [],
@@ -200,6 +209,12 @@ async function parseArgs(args: string[]): Promise<CliOptions> {
 
     if (arg === "--mode") {
       options.sessionMode = readSessionMode(args[index + 1]);
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--approval") {
+      options.approvalMode = readApprovalMode(args[index + 1]);
       index += 1;
       continue;
     }
@@ -274,7 +289,7 @@ async function loadEnvFile(filePath: string) {
 
 function printRunEvent(event: AgentRunEvent) {
   if (event.type === "run_started") {
-    console.log(`== run started: ${event.startedAt} mode=${event.sessionMode}`);
+    console.log(`== run started: ${event.startedAt} mode=${event.sessionMode} approval=${event.approvalMode}`);
     return;
   }
 
@@ -424,6 +439,7 @@ function printHeader(
   console.log(`Workspace: ${workspaceRoot}`);
   console.log(`Goal: ${goal}`);
   console.log(`Session mode: ${describeAgentSessionMode(sessionMode)}`);
+  console.log(`Approval: ${describeApprovalMode(options.approvalMode ?? getDefaultApprovalMode())}`);
   if (resumeRecord) {
     console.log(`Continue: ${formatResumeTitle(resumeRecord)}`);
   }
@@ -491,6 +507,9 @@ function printAgentResult(result: AgentRunResult | StoredAgentRunResult, options
   }
   console.log(`Mode: ${result.mode}`);
   console.log(`Session mode: ${result.sessionMode ?? "agent"}`);
+  if (result.approvalProfile) {
+    console.log(`Approval: ${result.approvalProfile.mode}`);
+  }
   console.log(`Model: ${result.model}`);
   console.log(`Workspace files indexed: ${result.workspace.fileCount}`);
   if (result.contextBudget) {
@@ -597,7 +616,7 @@ function printRecentRuns(summaries: AgentRunSummary[], options: CliOptions) {
     console.log(
       `  ${item.mode} / ${item.model} / tools=${item.toolCallCount} / patches=${item.patchFileCount}`
     );
-    console.log(`  session=${item.sessionMode ?? "agent"}`);
+    console.log(`  session=${item.sessionMode ?? "agent"} / approval=${item.approvalMode ?? "ask"}`);
     if (item.resumeFromRunId) {
       console.log(`  continued-from=${item.resumeFromRunId}`);
     }
@@ -689,6 +708,7 @@ Options:
   --stream         Print step updates while the agent is running.
   --trace          Print detailed agent trace entries.
   --mode <x>       Session mode: plan, agent, or apply. Defaults to agent, or apply with --apply.
+  --approval <x>   Approval profile: ask, trusted-read, or trusted-write. Defaults to AGENT_APPROVAL_MODE or ask.
   --apply          Ask before applying a returned patch proposal.
   -y, --yes        Confirm --apply without an interactive prompt.
   --validate <x>   Run typecheck, build, or all. With --apply, run after a successful patch apply.
@@ -758,6 +778,16 @@ function readSessionMode(value: string | undefined): AgentSessionMode {
 
   if (!isAgentSessionMode(mode)) {
     throw new Error("--mode must be plan, agent, or apply.");
+  }
+
+  return mode;
+}
+
+function readApprovalMode(value: string | undefined): ApprovalMode {
+  const mode = readRequiredArg(value, "--approval");
+
+  if (!isApprovalMode(mode)) {
+    throw new Error("--approval must be ask, trusted-read, or trusted-write.");
   }
 
   return mode;

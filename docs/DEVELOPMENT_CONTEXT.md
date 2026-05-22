@@ -62,9 +62,9 @@ Observed ideas to learn from:
 
 ## Current State
 
-Version: V0.18
+Version: V0.19
 
-The current implementation is a Node.js 22 + Next.js 16 learning workbench plus a CLI and a dependency-free TUI spike. It has read-only tools, explicit session modes, mode-aware TUI run filtering, explicit context budgets, heuristic context selection, configurable tool policy, model protocol repair, server-side patch diff preview, human-approved patch application, post-patch validation, local run history, Agent Event Bus, DeepSeek token streaming, terminal approval flow, and simple resume.
+The current implementation is a Node.js 22 + Next.js 16 learning workbench plus a CLI and a dependency-free TUI spike. It has read-only tools, explicit session modes, approval profiles, mode-aware TUI run filtering, explicit context budgets, heuristic context selection, configurable tool policy, model protocol repair, server-side patch diff preview, human-approved patch application, post-patch validation, local run history, Agent Event Bus, DeepSeek token streaming, terminal approval flow, and simple resume.
 
 Implemented:
 
@@ -105,6 +105,13 @@ Implemented:
 - TUI continuation inherits the selected run's saved session mode.
 - TUI recent-run rows show session mode, tool count, patch count, validation count, and continuation source.
 - `docs/DEEPSEEK_TUI_GAP_ANALYSIS.md` records the gap against real DeepSeek-TUI and a ten-version roadmap through V0.27.
+- `ApprovalMode` defines `ask`, `trusted-read`, and `trusted-write` trust profiles.
+- `src/lib/agent/approval-profile.ts` centralizes approval parsing, descriptions, prompt text, and profile snapshots.
+- Prompt construction includes the active approval profile and current trust boundary.
+- Run results, run summaries, event streams, CLI, Web, and TUI expose the active approval profile.
+- CLI supports `--approval ask|trusted-read|trusted-write`; TUI supports `p` to cycle profiles before running a goal.
+- TUI continuation inherits the selected run's saved approval profile.
+- V0.19 `trusted-write` is metadata only; patch application still requires explicit local review.
 - Read-only `list_files`, `read_file`, `search_text`, and `git_status` tools.
 - Tool definitions include `category`, `risk`, and `approvalRequired` so callable boundaries are visible to prompt, code, and docs.
 - `src/lib/agent/tool-policy.ts` turns environment variables into a run-level tool policy snapshot.
@@ -160,6 +167,7 @@ Important files:
 - `src/lib/agent/context-selection.ts`
 - `src/lib/agent/model-protocol.ts`
 - `src/lib/agent/tool-policy.ts`
+- `src/lib/agent/approval-profile.ts`
 - `src/lib/agent/tools.ts`
 - `src/lib/agent/git-tools.ts`
 - `src/cli/agent.ts`
@@ -183,6 +191,7 @@ Important files:
 - `docs/CLI.md`
 - `docs/TUI.md`
 - `docs/TUI_SESSION.md`
+- `docs/APPROVAL_PROFILES.md`
 - `docs/DEEPSEEK_TUI_GAP_ANALYSIS.md`
 - `docs/CONTEXT_BUDGET.md`
 - `docs/CONTEXT_SELECTION.md`
@@ -209,10 +218,10 @@ UI / CLI
   -> Generated docs + architecture snapshot
 ```
 
-The V0.17 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 validation, V0.5 run history, V0.6 terminal shell, V0.7 CLI streaming/approval, V0.8 cross-surface continuation, V0.9 shared event stream, V0.10 full-screen terminal renderer, V0.11 context budgets/tool boundaries, V0.12 local tool policy, V0.13 context selection, V0.14 model protocol repair, V0.15 patch diff review, V0.16 post-patch validation, and adds explicit plan/agent/apply session modes:
+The V0.19 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 validation, V0.5 run history, V0.6 terminal shell, V0.7 CLI streaming/approval, V0.8 cross-surface continuation, V0.9 shared event stream, V0.10 full-screen terminal renderer, V0.11 context budgets/tool boundaries, V0.12 local tool policy, V0.13 context selection, V0.14 model protocol repair, V0.15 patch diff review, V0.16 post-patch validation, V0.17 explicit plan/agent/apply session modes, V0.18 TUI session workflow, and adds explicit ask/trusted-read/trusted-write approval profiles:
 
 1. User submits a goal.
-2. Agent creates a turn state with `sessionMode=plan|agent|apply`.
+2. Agent creates a turn state with `sessionMode=plan|agent|apply` and `approvalProfile=ask|trusted-read|trusted-write`.
 3. Model chooses a tool call such as `list_files`, `read_file`, `search_text`, or `git_status`.
 4. Server validates the tool call against the active local tool policy.
 5. Tool output is appended to the transcript.
@@ -247,8 +256,9 @@ The V0.17 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 valid
 34. Runner builds a tool policy snapshot from `AGENT_ALLOWED_READ_TOOLS` and `AGENT_PATCH_PROPOSAL`.
 35. Prompt construction exposes only policy-allowed tools.
 36. Runner enforces the same policy before executing tool calls.
-37. CLI, Web, and TUI show context selection, protocol repair, patch diff, validation trigger, session mode, and policy metadata so users can understand why a run had a smaller prompt/tool surface, stayed read-only, needed repair, proposed risky writes, or failed verification.
+37. CLI, Web, and TUI show context selection, protocol repair, patch diff, validation trigger, session mode, approval profile, and policy metadata so users can understand why a run had a smaller prompt/tool surface, stayed read-only, needed repair, proposed risky writes, or failed verification.
 38. TUI can filter recent runs by session mode and continue with the selected run's saved mode.
+39. TUI can cycle approval profiles with `p` and continue with the selected run's saved approval profile.
 
 Debugging uses the official Next.js 16 `next dev --inspect` path. Start `npm run dev:inspect:break`, attach VS Code with `Attach Next.js Server (9229)`, and run `npm run debug:check` to verify that the guarded `debugger` statement in `src/app/api/agent/route.ts` is reachable before testing normal source breakpoints.
 
@@ -583,10 +593,32 @@ Built:
 
 Do not build yet:
 
-- approval profiles
 - YOLO/trust automation
 - arbitrary model-suggested shell commands
 - background task queues
+
+## V0.19 Completed
+
+Theme: approval profiles and safer trust boundaries.
+
+Built:
+
+- `ApprovalMode` with `ask`, `trusted-read`, and `trusted-write`.
+- `src/lib/agent/approval-profile.ts` for parsing, descriptions, prompt guidance, and run-level snapshots.
+- `approvalProfile` on run results, saved run records, recent-run summaries, and run-started events.
+- Prompt-level approval guidance so the model sees the current trust boundary.
+- Web approval profile segmented control.
+- CLI `--approval ask|trusted-read|trusted-write`.
+- TUI `p` key to cycle approval profiles before running a goal.
+- TUI continuation now inherits the selected run's saved approval profile.
+- `docs/APPROVAL_PROFILES.md` as the approval profile handoff note.
+
+Do not build yet:
+
+- automatic patch application without human approval
+- arbitrary model-suggested shell commands
+- background task queues
+- durable checklist/task state
 
 ## Safety Rules
 
@@ -604,7 +636,7 @@ Use this prompt when starting the next version:
 ```txt
 You are continuing DeepSeek TUI Demo.
 
-Goal: implement V0.19, approval profiles and safer trust boundaries for a macOS-first coding-agent learning project built with Next.js and TypeScript.
+Goal: implement V0.20, checklist workflow for a macOS-first coding-agent learning project built with Next.js and TypeScript.
 
 Read first:
 - docs/DEVELOPMENT_CONTEXT.md
@@ -614,6 +646,7 @@ Read first:
 - src/lib/agent/context-selection.ts
 - src/lib/agent/model-protocol.ts
 - src/lib/agent/tool-policy.ts
+- src/lib/agent/approval-profile.ts
 - src/lib/agent/prompts.ts
 - src/lib/agent/tools.ts
 - src/lib/agent/git-tools.ts
@@ -633,6 +666,7 @@ Read first:
 - docs/VALIDATION_LOOP.md
 - docs/SESSION_MODES.md
 - docs/TUI_SESSION.md
+- docs/APPROVAL_PROFILES.md
 - docs/DEEPSEEK_TUI_GAP_ANALYSIS.md
 
 Constraints:
@@ -650,12 +684,14 @@ Constraints:
 - Keep the V0.16 post-patch validation controls working.
 - Keep the V0.17 plan/agent/apply session modes working.
 - Keep the V0.18 TUI recent-run filtering and mode-aware continuation working.
+- Keep the V0.19 approval profiles working.
 - Keep human approval before writes.
 - Never execute model-suggested arbitrary commands.
 - Reuse the existing runner, run store, resume, patch, and validation modules.
-- Add approval profiles such as ask, trusted-read, and trusted-write as metadata and policy surfaces.
-- Keep writes human-approved by default; do not implement YOLO automation yet.
-- Surface approval mode in prompt, run result, Web, CLI, TUI, and docs.
+- Add a small checklist model to the agent answer shape.
+- Surface checklist items in Web, CLI, and TUI without making them a hidden chain-of-thought log.
+- Persist checklist summaries in run history and include them in resume context.
+- Keep checklist state user-visible and high-level.
 - Keep patch application behind explicit human approval.
 - Keep validation commands whitelist-only.
 - Do not store API keys or full hidden reasoning.

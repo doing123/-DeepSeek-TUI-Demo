@@ -2,6 +2,8 @@ export type AgentMode = "deepseek" | "offline";
 
 export type AgentSessionMode = "plan" | "agent" | "apply";
 
+export type ApprovalMode = "ask" | "trusted-read" | "trusted-write";
+
 export type ReadOnlyToolName = "list_files" | "read_file" | "search_text" | "git_status";
 
 export type AgentMessage = {
@@ -26,6 +28,7 @@ export type AgentRunEvent =
       type: "run_started";
       goal: string;
       sessionMode: AgentSessionMode;
+      approvalMode: ApprovalMode;
       startedAt: string;
       resumeFromRunId?: string;
     }
@@ -96,6 +99,16 @@ export type ToolPolicySnapshot = {
   patchProposal: "enabled" | "disabled";
   validationCommands: "manual";
   source: "env";
+  warnings: string[];
+};
+
+export type ApprovalProfileSnapshot = {
+  mode: ApprovalMode;
+  readTools: "auto-approved";
+  patchApplication: "manual-review" | "trusted-after-preview";
+  validationCommands: "manual";
+  shellCommands: "blocked";
+  source: "env" | "request";
   warnings: string[];
 };
 
@@ -249,6 +262,7 @@ export type AgentRunResult = {
   goal: string;
   resumeFromRunId?: string;
   sessionMode: AgentSessionMode;
+  approvalProfile?: ApprovalProfileSnapshot;
   mode: AgentMode;
   model: string;
   startedAt: string;
@@ -286,6 +300,7 @@ export type AgentRunSummary = {
   goal: string;
   resumeFromRunId?: string;
   sessionMode: AgentSessionMode;
+  approvalMode?: ApprovalMode;
   title: string;
   mode: AgentMode;
   model: string;

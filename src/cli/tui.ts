@@ -3,6 +3,11 @@ import path from "path";
 import { emitKeypressEvents } from "readline";
 import { createInterface as createPrompt } from "readline/promises";
 import { pathToFileURL } from "url";
+import {
+  describeApprovalMode,
+  nextApprovalMode,
+  normalizeApprovalMode
+} from "../lib/agent/approval-profile";
 import { describeContextSelection } from "../lib/agent/context-selection";
 import { describeProtocolRepairPolicy } from "../lib/agent/model-protocol";
 import { applyPatchProposal } from "../lib/agent/patches";
@@ -26,6 +31,7 @@ import type {
   AgentRunResult,
   AgentRunSummary,
   AgentSessionMode,
+  ApprovalMode,
   ValidationRunResult
 } from "../lib/agent/types";
 
@@ -35,12 +41,14 @@ type TuiOptions = {
   help: boolean;
   once: boolean;
   sessionMode: AgentSessionMode;
+  approvalMode: ApprovalMode;
 };
 
 type TuiState = {
   workspaceRoot: string;
   goal: string;
   sessionMode: AgentSessionMode;
+  approvalMode: ApprovalMode;
   recentFilter: AgentSessionMode | "all";
   recentRuns: AgentRunSummary[];
   selectedIndex: number;
@@ -75,7 +83,7 @@ async function main() {
   await loadLocalEnv(workspaceRoot);
 
   if (options.once || !process.stdout.isTTY || !process.stdin.isTTY) {
-    await runOnce(workspaceRoot, options.goal, options.sessionMode);
+    await runOnce(workspaceRoot, options.goal, options.sessionMode, options.approvalMode);
     return;
   }
 
@@ -83,6 +91,7 @@ async function main() {
     workspaceRoot,
     goal: options.goal,
     sessionMode: options.sessionMode,
+    approvalMode: options.approvalMode,
     recentFilter: "all",
     recentRuns: await listAgentRunSummaries(workspaceRoot),
     selectedIndex: 0,
@@ -103,7 +112,8 @@ function parseArgs(args: string[]): TuiOptions {
     goal: DEFAULT_GOAL,
     help: false,
     once: false,
-    sessionMode: "agent"
+    sessionMode: "agent",
+    approvalMode: "ask"
   };
   const goalParts: string[] = [];
 
@@ -128,6 +138,12 @@ function parseArgs(args: string[]): TuiOptions {
 
     if (arg === "--mode") {
       options.sessionMode = normalizeAgentSessionMode(readRequiredArg(args[index + 1], "--mode"));
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--approval") {
+      options.approvalMode = normalizeApprovalMode(readRequiredArg(args[index + 1], "--approval")) ?? "ask";
       index += 1;
       continue;
     }
@@ -200,6 +216,13 @@ async function runInteractiveTui(state: TuiState) {
       return;
     }
 
+    if (key.name === "p") {
+      state.approvalMode = nextApprovalMode(state.approvalMode);
+      state.status = `Approval: ${describeApprovalMode(state.approvalMode)}`;
+      render(state);
+      return;
+    }
+
     if (key.name === "f") {
       state.recentFilter = nextRecentFilter(state.recentFilter);
       state.selectedIndex = 0;
@@ -236,10 +259,16 @@ async function runInteractiveTui(state: TuiState) {
   });
 }
 
-async function runOnce(workspaceRoot: string, goal: string, sessionMode: AgentSessionMode) {
+async function runOnce(
+  workspaceRoot: string,
+  goal: string,
+  sessionMode: AgentSessionMode,
+  approvalMode: ApprovalMode
+) {
   const result = await runCodingAgent({
     goal,
     sessionMode,
+    approvalMode,
     streamModel: true,
     workspaceRoot,
     onEvent: (event) => {
@@ -276,6 +305,7 @@ async function runTuiAgent(state: TuiState) {
       promptGoal,
       resumeFromRunId: resumeRecord?.id,
       sessionMode: state.sessionMode,
+      approvalMode: state.approvalMode,
       streamModel: true,
       workspaceRoot: state.workspaceRoot,
       onEvent: (event) => {
@@ -333,8 +363,9 @@ function render(state: TuiState) {
   lines.push(`Workspace: ${truncate(state.workspaceRoot, width - 11)}`);
   lines.push("");
   lines.push(row("Goal", state.goal, leftWidth, "Live Events", state.status, rightWidth));
-  lines.push(row("Keys", "r run · m mode · f filter · n edit · ↑↓ select · c continue · a apply · v validate · q quit", leftWidth, "", "", rightWidth));
+  lines.push(row("Keys", "r run · m mode · p approval · f filter · n edit · ↑↓ select · c continue · a apply · v validate · q quit", leftWidth, "", "", rightWidth));
   lines.push(row("Mode", describeAgentSessionMode(state.sessionMode), leftWidth, "", "", rightWidth));
+  lines.push(row("Approval", describeApprovalMode(state.approvalMode), leftWidth, "", "", rightWidth));
   lines.push(row("Resume", state.resumeRunId ?? "none", leftWidth, "Recent", `${state.recentFilter} ${visibleRuns.length}/${state.recentRuns.length}`, rightWidth));
   lines.push(row("Tool Calls", formatToolSummary(state), leftWidth, "Policy", formatPolicySummary(state.result), rightWidth));
   lines.push(row("Context", formatContextSummary(state.result), leftWidth, "", "", rightWidth));
@@ -377,6 +408,7 @@ function render(state: TuiState) {
     lines.push(color("Result", "green"));
     lines.push(...wrap(`${state.result.answer.title}: ${state.result.answer.summary}`, width).slice(0, 4));
     lines.push(color(`Session: ${state.result.sessionMode ?? "agent"}`, "dim"));
+    lines.push(color(`Approval: ${state.result.approvalProfile?.mode ?? "ask"}`, "dim"));
 
     if (state.result.answer.patchProposal) {
       lines.push(color(`Patch: ${state.result.answer.patchProposal.summary}`, "cyan"));
@@ -424,7 +456,7 @@ function formatRecentRuns(
   const lines = [`Recent Runs (${filter})`];
   for (const [index, run] of runs.slice(0, 8).entries()) {
     const marker = index === selectedIndex ? ">" : " ";
-    const meta = `${run.sessionMode ?? "agent"} · tools=${run.toolCallCount} · patch=${run.patchFileCount} · checks=${run.validationCount}`;
+    const meta = `${run.sessionMode ?? "agent"} · ${run.approvalMode ?? "ask"} · tools=${run.toolCallCount} · patch=${run.patchFileCount} · checks=${run.validationCount}`;
     lines.push(`${marker} ${truncate(run.title, width - 2)}`);
     lines.push(`  ${truncate(meta, width - 2)}`);
     lines.push(`  ${truncate(run.goal, width - 2)}`);
@@ -446,8 +478,9 @@ function continueSelectedRun(state: TuiState) {
 
   state.resumeRunId = selected.id;
   state.sessionMode = selected.sessionMode ?? "agent";
+  state.approvalMode = selected.approvalMode ?? "ask";
   state.goal = `继续上一轮任务：${selected.goal}\n\n本轮目标：`;
-  state.status = `Continuing ${selected.id} as ${state.sessionMode}`;
+  state.status = `Continuing ${selected.id} as ${state.sessionMode}/${state.approvalMode}`;
 }
 
 function nextSessionMode(current: AgentSessionMode) {
@@ -564,7 +597,7 @@ async function loadEnvFile(filePath: string) {
 
 function formatEvent(event: AgentRunEvent) {
   if (event.type === "run_started") {
-    return `run_started ${event.sessionMode} ${event.goal}`;
+    return `run_started ${event.sessionMode}/${event.approvalMode} ${event.goal}`;
   }
 
   if (event.type === "step_started") {
@@ -712,11 +745,13 @@ Usage:
   npm run tui
   npm run tui -- "inspect current repo"
   npm run tui -- --mode plan "plan next change"
+  npm run tui -- --approval trusted-read "inspect current repo"
   npm run tui -- --once "non-interactive smoke test"
 
 Keys:
   r / enter  Run current goal
   m          Cycle session mode: plan / agent / apply
+  p          Cycle approval profile: ask / trusted-read / trusted-write
   f          Cycle recent-run filter: all / plan / agent / apply
   n          Edit goal
   up/down    Select recent run

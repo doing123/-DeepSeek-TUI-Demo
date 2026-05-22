@@ -7,6 +7,8 @@ import type {
   AgentRunResult,
   AgentRunSummary,
   AgentSessionMode,
+  ApprovalMode,
+  ApprovalProfileSnapshot,
   ContextSelection,
   PatchApplyResult,
   PatchDiffPreview,
@@ -17,6 +19,7 @@ import type {
   ValidationTrigger,
   ValidationRunResult
 } from "@/lib/agent/types";
+import { describeApprovalMode } from "@/lib/agent/approval-profile";
 import { describeAgentSessionMode } from "@/lib/agent/session-mode";
 
 const starterGoals = [
@@ -33,6 +36,7 @@ const defaultGoal =
 export function AgentWorkbench() {
   const [goal, setGoal] = useState(defaultGoal);
   const [sessionMode, setSessionMode] = useState<AgentSessionMode>("agent");
+  const [approvalMode, setApprovalMode] = useState<ApprovalMode>("ask");
   const [result, setResult] = useState<AgentRunResult | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<AgentRunRecord | null>(null);
   const [resumeRun, setResumeRun] = useState<AgentRunSummary | null>(null);
@@ -76,6 +80,7 @@ export function AgentWorkbench() {
 
   function continueRun(run: AgentRunSummary) {
     setResumeRun(run);
+    setApprovalMode(run.approvalMode ?? "ask");
     setGoal(`继续上一轮任务：${run.goal}\n\n本轮目标：`);
     setSelectedRecord(null);
     setLiveEvents([]);
@@ -113,6 +118,7 @@ export function AgentWorkbench() {
         body: JSON.stringify({
           goal,
           sessionMode,
+          approvalMode,
           ...(resumeRun ? { resumeRunId: resumeRun.id } : {})
         })
       });
@@ -160,6 +166,11 @@ export function AgentWorkbench() {
             onChange={setSessionMode}
             disabled={isRunning}
           />
+          <ApprovalModeControl
+            value={approvalMode}
+            onChange={setApprovalMode}
+            disabled={isRunning}
+          />
           <textarea
             id="goal"
             value={goal}
@@ -186,6 +197,7 @@ export function AgentWorkbench() {
                 setGoal(defaultGoal);
                 setResumeRun(null);
                 setSessionMode("agent");
+                setApprovalMode("ask");
               }}
             >
               重置
@@ -273,6 +285,35 @@ function SessionModeControl({
   );
 }
 
+function ApprovalModeControl({
+  value,
+  onChange,
+  disabled
+}: {
+  value: ApprovalMode;
+  onChange: (mode: ApprovalMode) => void;
+  disabled: boolean;
+}) {
+  const modes: ApprovalMode[] = ["ask", "trusted-read", "trusted-write"];
+
+  return (
+    <div className="mode-control" aria-label="审批配置">
+      {modes.map((mode) => (
+        <button
+          className={value === mode ? "mode-control__item mode-control__item--active" : "mode-control__item"}
+          type="button"
+          key={mode}
+          disabled={disabled}
+          onClick={() => onChange(mode)}
+          title={describeApprovalMode(mode)}
+        >
+          {mode}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function LiveRunView({
   events,
   streamText
@@ -335,8 +376,8 @@ function formatLiveEventTitle(event: AgentRunEvent) {
 function formatLiveEventDetail(event: AgentRunEvent) {
   if (event.type === "run_started") {
     return event.resumeFromRunId
-      ? `${event.sessionMode} · 续接 ${event.resumeFromRunId}`
-      : `${event.sessionMode} · ${event.goal}`;
+      ? `${event.sessionMode} · ${event.approvalMode} · 续接 ${event.resumeFromRunId}`
+      : `${event.sessionMode} · ${event.approvalMode} · ${event.goal}`;
   }
 
   if (event.type === "step_started" || event.type === "step_completed") {
@@ -388,7 +429,7 @@ function RecentRunsPanel({
                 <strong>{run.title}</strong>
                 <span>{run.goal}</span>
                 <small>
-                  {run.sessionMode ?? "agent"} · {run.mode} · {run.toolCallCount} tools · {run.validationCount} checks
+                  {run.sessionMode ?? "agent"} · {run.approvalMode ?? "ask"} · {run.mode} · {run.toolCallCount} tools · {run.validationCount} checks
                 </small>
               </button>
               <button
@@ -424,6 +465,9 @@ function AgentResultView({
               {result.mode}
             </span>
             <span className="tag tag--neutral">{result.sessionMode ?? "agent"}</span>
+            {result.approvalProfile ? (
+              <span className="tag tag--neutral">{result.approvalProfile.mode}</span>
+            ) : null}
             <span className="tag tag--neutral">{result.model}</span>
             {result.resumeFromRunId ? (
               <span className="tag tag--neutral">continued</span>
@@ -542,6 +586,20 @@ function AgentResultView({
                       {error.reason} · repair {error.repairAttempted ? "attempted" : "skipped"}
                     </span>
                   </li>
+                ))}
+              </ul>
+            ) : null}
+          </section>
+        ) : null}
+
+        {result.approvalProfile ? (
+          <section className="panel">
+            <h3>审批配置</h3>
+            <p className="summary">{formatApprovalProfileSummary(result.approvalProfile)}</p>
+            {result.approvalProfile.warnings.length > 0 ? (
+              <ul className="list compact-list">
+                {result.approvalProfile.warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
                 ))}
               </ul>
             ) : null}
@@ -1062,6 +1120,17 @@ function formatToolPolicySummary(policy: ToolPolicySnapshot) {
     `patchProposal: ${policy.patchProposal}`,
     `validation: ${policy.validationCommands}`,
     `source: ${policy.source}`
+  ].join(" · ");
+}
+
+function formatApprovalProfileSummary(profile: ApprovalProfileSnapshot) {
+  return [
+    `mode: ${profile.mode}`,
+    `read: ${profile.readTools}`,
+    `patch: ${profile.patchApplication}`,
+    `validation: ${profile.validationCommands}`,
+    `shell: ${profile.shellCommands}`,
+    `source: ${profile.source}`
   ].join(" · ");
 }
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildResumePromptGoal } from "@/lib/agent/resume";
+import { normalizeApprovalMode } from "@/lib/agent/approval-profile";
 import { runCodingAgent } from "@/lib/agent/runner";
 import { normalizeAgentSessionMode } from "@/lib/agent/session-mode";
 import {
@@ -32,6 +33,7 @@ export async function POST(request: Request) {
   try {
     const resumeRunId = readOptionalString(payload, "resumeRunId");
     const sessionMode = normalizeAgentSessionMode(readOptionalString(payload, "sessionMode"));
+    const approvalMode = normalizeApprovalMode(readOptionalString(payload, "approvalMode"));
     const resumeRecord = resumeRunId
       ? await readAgentRunRecord(process.cwd(), resumeRunId)
       : null;
@@ -49,6 +51,7 @@ export async function POST(request: Request) {
       promptGoal,
       resumeFromRunId: resumeRecord?.id,
       sessionMode,
+      approvalMode,
       workspaceRoot: process.cwd()
     });
 

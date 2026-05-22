@@ -24,6 +24,9 @@ V0.17 adds session modes to the terminal loop. Press `m` to cycle
 V0.18 adds a mode-aware recent-run filter and in-process turn history, making
 the terminal loop easier to use across repeated plan/agent/apply passes.
 
+V0.19 adds approval profiles to the terminal loop. Press `p` to cycle
+`ask -> trusted-read -> trusted-write` before running the current goal.
+
 ```bash
 npm run tui
 npm run tui -- "查看当前仓库状态"
@@ -33,6 +36,7 @@ npm run tui -- "查看当前仓库状态"
 
 - `r` / `enter`: run the current goal
 - `m`: cycle session mode
+- `p`: cycle approval profile
 - `f`: cycle recent-run filter
 - `n`: edit the goal
 - `up` / `down`: select a saved run
@@ -104,3 +108,10 @@ model toward a reviewable patch while preserving human approval.
 The recent-run panel can filter by `all`, `plan`, `agent`, or `apply`. Continuing
 a selected run inherits the saved session mode, so a planning thread stays in
 plan mode and an implementation thread stays in apply mode unless changed.
+
+## Approval Profiles
+
+The TUI shows the active approval profile in the status area and stores it on
+each saved run. Continuing a run inherits the saved profile. In V0.19,
+`trusted-write` is visible metadata only; applying a patch still routes through
+the `a` key and the same safe patch module.

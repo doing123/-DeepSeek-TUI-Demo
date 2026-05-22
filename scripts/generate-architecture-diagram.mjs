@@ -51,7 +51,7 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     {
       id: "runner",
       label: "Agent Runner",
-      detail: "session mode / TUI filter / repair / validation",
+      detail: "session / approval / repair / validation",
       x: 790,
       y: 170,
       w: 300,
@@ -71,7 +71,7 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     {
       id: "prompt",
       label: "Prompt Protocol",
-      detail: "tool_call / final JSON / repair prompt",
+      detail: "tool_call / final JSON / approval guidance",
       x: 790,
       y: 345,
       w: 300,
@@ -121,7 +121,7 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     {
       id: "safety",
       label: "Patch Review + Validation",
-      detail: "post-patch validation / typecheck / build",
+      detail: "approval profile / diff / post-patch checks",
       x: 1000,
       y: 535,
       w: 420,
@@ -233,6 +233,8 @@ function pickFeatureHighlights(features) {
     "TUI 运行筛选",
     "TUI 会话续接",
     "DeepSeek-TUI 差距分析",
+    "审批配置",
+    "信任边界",
     "Plan 模式",
     "Apply 模式",
     "TUI 模式切换",

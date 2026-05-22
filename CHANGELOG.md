@@ -6,7 +6,27 @@ All notable project changes are tracked here.
 
 ### Notes
 
-- Next planned focus: approval profiles and safer trust boundaries.
+- Next planned focus: checklist workflow and persisted task state.
+
+## 0.19.0 - 2026-05-22
+
+### Added
+
+- Added `ask`, `trusted-read`, and `trusted-write` approval profiles.
+- Added `src/lib/agent/approval-profile.ts` for approval parsing, descriptions, prompt guidance, and profile snapshots.
+- Added approval profile metadata to run results, run-started events, saved run records, and recent-run summaries.
+- Added Web approval-profile control below the session-mode selector.
+- Added CLI `--approval ask|trusted-read|trusted-write`.
+- Added TUI `p` key to cycle approval profiles and inherit them when continuing a saved run.
+- Added `docs/APPROVAL_PROFILES.md`.
+
+### Changed
+
+- Prompt construction now includes the active approval profile and trust boundary.
+- CLI, Web, and TUI now display approval metadata next to session mode and policy metadata.
+- `trusted-write` is explicitly recorded as future automation intent, while patch application still requires human review in V0.19.
+- Updated handoff context, project planning, and generated architecture snapshots for V0.19.
+- Bumped project version to `0.19.0`.
 
 ## 0.18.0 - 2026-05-22
 

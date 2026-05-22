@@ -1,6 +1,12 @@
 import { randomUUID } from "crypto";
 import { describeContextBudget, getContextBudget } from "./context-budget";
 import {
+  buildApprovalProfile,
+  describeApprovalProfile,
+  getDefaultApprovalMode,
+  normalizeApprovalMode
+} from "./approval-profile";
+import {
   describeContextSelection,
   selectContextFiles
 } from "./context-selection";
@@ -47,6 +53,8 @@ import type {
   AgentRunResult,
   AgentSessionMode,
   AgentStep,
+  ApprovalMode,
+  ApprovalProfileSnapshot,
   ModelProtocolError,
   ModelProtocolErrorCode,
   PatchDiffPreview,
@@ -62,6 +70,7 @@ type RunCodingAgentInput = {
   promptGoal?: string;
   resumeFromRunId?: string;
   sessionMode?: AgentSessionMode;
+  approvalMode?: ApprovalMode;
   streamModel?: boolean;
   workspaceRoot: string;
   onEvent?: (event: AgentRunEvent) => void;
@@ -74,6 +83,7 @@ export async function runCodingAgent({
   promptGoal,
   resumeFromRunId,
   sessionMode: inputSessionMode,
+  approvalMode: inputApprovalMode,
   streamModel = false,
   workspaceRoot,
   onEvent
@@ -83,6 +93,12 @@ export async function runCodingAgent({
   const config = getDeepSeekConfig();
   const contextBudget = getContextBudget();
   const sessionMode = normalizeAgentSessionMode(inputSessionMode);
+  const requestedApprovalMode = normalizeApprovalMode(inputApprovalMode);
+  const approvalProfile = buildApprovalProfile({
+    mode: requestedApprovalMode ?? getDefaultApprovalMode(),
+    sessionMode,
+    source: requestedApprovalMode ? "request" : "env"
+  });
   const toolPolicy = applySessionModeToToolPolicy(getToolPolicy(), sessionMode);
   const protocolRepairPolicy = getProtocolRepairPolicy();
   const availableTools = filterToolsByPolicy(READ_ONLY_TOOL_DEFINITIONS, toolPolicy);
@@ -92,11 +108,23 @@ export async function runCodingAgent({
     type: "run_started",
     goal,
     sessionMode,
+    approvalMode: approvalProfile.mode,
     startedAt,
     resumeFromRunId
   });
 
   pushStep(steps, "理解目标", `收到任务：${goal}`, { kind: "system" }, onEvent);
+  completeLatestStep(steps, undefined, {}, onEvent);
+
+  pushStep(
+    steps,
+    "应用审批配置",
+    describeApprovalProfile(approvalProfile),
+    {
+      kind: "system"
+    },
+    onEvent
+  );
   completeLatestStep(steps, undefined, {}, onEvent);
 
   pushStep(
@@ -208,6 +236,7 @@ export async function runCodingAgent({
       goal,
       resumeFromRunId,
       sessionMode,
+      approvalProfile,
       mode: "offline",
       model: config.model,
       startedAt,
@@ -224,7 +253,13 @@ export async function runCodingAgent({
       protocolRepairCount: 0,
       protocolErrors: [],
       toolCallCount: 0,
-      answer: buildOfflineAnswer(snapshot.fileCount, contextSelection.selectedCount, toolPolicy, sessionMode)
+      answer: buildOfflineAnswer(
+        snapshot.fileCount,
+        contextSelection.selectedCount,
+        toolPolicy,
+        sessionMode,
+        approvalProfile
+      )
     };
 
     onEvent?.({ type: "run_completed", result });
@@ -237,6 +272,7 @@ export async function runCodingAgent({
     availableTools,
     toolPolicy,
     sessionMode,
+    approvalProfile,
     MAX_TOOL_CALLS
   );
   let toolCallCount = 0;
@@ -280,6 +316,7 @@ export async function runCodingAgent({
         goal,
         resumeFromRunId,
         sessionMode,
+        approvalProfile,
         model,
         startedAt,
         steps,
@@ -337,6 +374,7 @@ export async function runCodingAgent({
         goal,
         resumeFromRunId,
         sessionMode,
+        approvalProfile,
         model,
         startedAt,
         steps,
@@ -356,6 +394,7 @@ export async function runCodingAgent({
         goal,
         resumeFromRunId,
         sessionMode,
+        approvalProfile,
         model,
         startedAt,
         steps,
@@ -375,6 +414,7 @@ export async function runCodingAgent({
         goal,
         resumeFromRunId,
         sessionMode,
+        approvalProfile,
         model,
         startedAt,
         steps,
@@ -425,6 +465,7 @@ export async function runCodingAgent({
     goal,
     resumeFromRunId,
     sessionMode,
+    approvalProfile,
     model,
     startedAt,
     steps,
@@ -486,6 +527,7 @@ function buildRunResult({
   goal,
   resumeFromRunId,
   sessionMode,
+  approvalProfile,
   model,
   startedAt,
   steps,
@@ -503,6 +545,7 @@ function buildRunResult({
   goal: string;
   resumeFromRunId?: string;
   sessionMode: AgentSessionMode;
+  approvalProfile: ApprovalProfileSnapshot;
   model: string;
   startedAt: string;
   steps: AgentStep[];
@@ -522,6 +565,7 @@ function buildRunResult({
     goal,
     resumeFromRunId,
     sessionMode,
+    approvalProfile,
     mode: "deepseek",
     model,
     startedAt,
@@ -587,16 +631,18 @@ function buildOfflineAnswer(
   fileCount: number,
   selectedFileCount: number,
   toolPolicy: ToolPolicySnapshot,
-  sessionMode: AgentSessionMode
+  sessionMode: AgentSessionMode,
+  approvalProfile: ApprovalProfileSnapshot
 ): AgentAnswer {
   const modeLine = describeAgentSessionMode(sessionMode);
 
   return {
-    title: "TUI 会话工作流已就绪",
+    title: "审批配置已接入",
     summary:
-      `当前运行在离线模式，session mode 为 ${sessionMode}。V0.18 已经具备 plan/agent/apply 会话模式骨架、只读工具循环、结构化补丁提案、补丁 diff 审查、人工确认后的安全应用入口、应用后验证闭环、运行历史、终端 CLI/TUI、续接上下文、Agent Event Bus、DeepSeek token streaming、上下文预算、上下文选择、可配置工具策略、模型协议修复、TUI 最近运行过滤和 DeepSeek-TUI 差距规划。`,
+      `当前运行在离线模式，session mode 为 ${sessionMode}，approval profile 为 ${approvalProfile.mode}。V0.19 已经具备 plan/agent/apply 会话模式骨架、只读工具循环、结构化补丁提案、补丁 diff 审查、人工确认后的安全应用入口、应用后验证闭环、运行历史、终端 CLI/TUI、续接上下文、Agent Event Bus、DeepSeek token streaming、上下文预算、上下文选择、可配置工具策略、模型协议修复、TUI 最近运行过滤、DeepSeek-TUI 差距规划和显式审批配置。`,
     plan: [
       `本轮会话模式：${modeLine}。`,
+      `本轮审批配置：${describeApprovalProfile(approvalProfile)}。`,
       "把 Web UI 作为任务入口，收集用户的编码目标。",
       `服务端先索引当前工作区的 ${fileCount} 个文本文件，再选择 ${selectedFileCount} 个初始上下文候选。`,
       "模型通过严格 JSON 请求只读工具，服务端执行后把结果回填。",
@@ -610,7 +656,8 @@ function buildOfflineAnswer(
       "CLI 和 Web 都可以选择历史 run，把上一轮摘要、计划、风险、补丁元信息和验证结果作为本轮上下文。",
       "Web 流式 API 会发送 run、step、model token、tool call 和 run completed 事件。",
       "V0.14 在模型输出不符合 JSON 协议时会记录错误分类，并最多发送一次受控修复提示。",
-      "V0.18 在 TUI 中增加最近运行过滤、会话模式继承和更完整的运行元信息，便于学习多轮 agent 工作流。"
+      "V0.18 在 TUI 中增加最近运行过滤、会话模式继承和更完整的运行元信息，便于学习多轮 agent 工作流。",
+      "V0.19 把 ask、trusted-read、trusted-write 作为运行配置保存到 prompt、history、CLI、Web 和 TUI。"
     ],
     filesToInspect: [
       "src/app/api/agent/route.ts",
@@ -626,6 +673,7 @@ function buildOfflineAnswer(
       "src/lib/agent/context-selection.ts",
       "src/lib/agent/model-protocol.ts",
       "src/lib/agent/tool-policy.ts",
+      "src/lib/agent/approval-profile.ts",
       "src/cli/tui.ts",
       "docs/CONTEXT_BUDGET.md",
       "docs/CONTEXT_SELECTION.md",
@@ -634,23 +682,26 @@ function buildOfflineAnswer(
       "docs/VALIDATION_LOOP.md",
       "docs/SESSION_MODES.md",
       "docs/TUI_SESSION.md",
+      "docs/APPROVAL_PROFILES.md",
       "docs/DEEPSEEK_TUI_GAP_ANALYSIS.md",
       "src/app/api/agent/stream/route.ts"
     ],
     proposedChanges: [
-      "V0.19 可以继续做 approval profiles 和 trust boundary，把 DeepSeek-TUI 的人工审批/信任策略显式建模。"
+      "V0.20 可以继续做 task checklist / todo workflow，让 agent 每轮输出和保存可推进的任务清单。"
     ],
     risks: [
       "当前版本默认不会自动修改文件，所有 patchProposal 写入仍需要人工确认。",
       "上下文截断很简单，大仓库需要索引、检索和 token 预算。",
       `当前工具边界：${describeToolBoundaries(READ_ONLY_TOOL_DEFINITIONS)}`,
       `当前工具策略：${describeToolPolicy(toolPolicy)}`,
+      `当前审批配置：${describeApprovalProfile(approvalProfile)}`,
       "DeepSeek key 只应放在服务端环境变量，不能暴露到浏览器。"
     ],
     nextActions: [
       "复制 .env.example 为 .env.local 并填写 DEEPSEEK_API_KEY。",
       "运行 npm run dev 后在浏览器中测试任务输入。",
       "运行 npm run agent -- --stream \"查看当前仓库状态\" 测试终端 token streaming。",
+      "运行 npm run agent -- --approval trusted-read \"查看当前仓库状态\" 测试审批配置透传。",
       "调整 AGENT_CONTEXT_* 环境变量测试预算收敛效果。",
       "调整 AGENT_CONTEXT_SELECTED_MAX_FILES 测试初始上下文选择数量。",
       "调整 AGENT_PROTOCOL_REPAIR_MAX_ATTEMPTS 测试协议修复策略。",
