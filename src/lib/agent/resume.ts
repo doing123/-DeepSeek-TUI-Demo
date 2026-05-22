@@ -18,10 +18,7 @@ export function buildResumePromptGoal(nextGoal: string, record: AgentRunRecord) 
     : ["上一轮没有保存补丁内容；如需修改文件，本轮必须重新输出 patchProposal 供用户审批。"];
   const validationLines =
     record.validations.length > 0
-      ? record.validations.slice(-MAX_ITEMS_PER_SECTION).map((validation) => {
-          const status = validation.ok ? "ok" : "failed";
-          return `${status}: ${validation.displayCommand} (${validation.durationMs}ms)`;
-        })
+      ? record.validations.slice(-MAX_ITEMS_PER_SECTION).map(formatValidationLine)
       : ["上一轮没有关联验证记录。"];
 
   return [
@@ -70,4 +67,22 @@ export function formatResumeTitle(record: AgentRunRecord) {
 function toBullets(items: string[]) {
   const lines = items.slice(0, MAX_ITEMS_PER_SECTION);
   return lines.length > 0 ? lines.map((item) => `- ${item}`).join("\n") : "- 无";
+}
+
+function formatValidationLine(validation: AgentRunRecord["validations"][number]) {
+  const status = validation.ok ? "ok" : "failed";
+  const trigger = validation.trigger ?? "manual";
+  const output = validation.ok ? "" : `; output=${compactOutput(validation.stderr || validation.stdout)}`;
+
+  return `${trigger}: ${status}: ${validation.displayCommand} exit=${validation.exitCode ?? "unknown"} (${validation.durationMs}ms)${output}`;
+}
+
+function compactOutput(output: string) {
+  const oneLine = output.replace(/\s+/g, " ").trim();
+
+  if (!oneLine) {
+    return "no output";
+  }
+
+  return oneLine.length > 500 ? `${oneLine.slice(0, 500)}...` : oneLine;
 }

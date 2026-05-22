@@ -51,7 +51,7 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     {
       id: "runner",
       label: "Agent Runner",
-      detail: "context selection / protocol repair / patch diff",
+      detail: "context selection / repair / patch diff / validation",
       x: 790,
       y: 170,
       w: 300,
@@ -121,7 +121,7 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     {
       id: "safety",
       label: "Patch Review + Validation",
-      detail: "diff preview / typecheck / build / 白名单执行",
+      detail: "post-patch validation / typecheck / build",
       x: 1000,
       y: 535,
       w: 420,
@@ -228,6 +228,10 @@ function nextRoadmapText(roadmap, version) {
 
 function pickFeatureHighlights(features) {
   const keywords = [
+    "应用后验证",
+    "CLI 验证闭环",
+    "TUI 验证入口",
+    "验证触发来源",
     "Patch diff",
     "写入风险视图",
     "协议修复",

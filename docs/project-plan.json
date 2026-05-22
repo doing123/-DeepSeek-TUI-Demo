@@ -41,6 +41,10 @@
       "description": "在人工审批写入前，服务端计算 patchProposal 的行级摘要、风险标签和紧凑 diff 片段。"
     },
     {
+      "name": "Validation Loop",
+      "description": "在补丁被人工应用后运行白名单验证命令，并把验证结果写回 run history 和 resume 上下文。"
+    },
+    {
       "name": "DeepSeek Provider",
       "description": "封装 OpenAI-compatible chat completions 和 SSE token streaming。"
     },
@@ -83,6 +87,10 @@
     "Patch 策略：AGENT_PATCH_PROPOSAL=disabled 时，runner 会移除模型返回的 patchProposal。",
     "Patch diff：runner 在 final answer 包含 patchProposal 时生成服务端 diff 预览。",
     "写入风险视图：CLI、Web、TUI 展示补丁 additions/deletions、风险标签和 diff 片段。",
+    "应用后验证：Web 可在应用补丁后自动运行 typecheck、build、all 或跳过。",
+    "CLI 验证闭环：npm run agent -- --apply --validate 只在补丁成功应用后运行验证。",
+    "TUI 验证入口：按 v 对最新运行执行 typecheck，并把结果写回 run history。",
+    "验证触发来源：ValidationRunResult 记录 manual 或 post_patch，方便续接时理解验证语境。",
     "离线模式：没有 API key 时仍能返回本地规划结果。",
     "工作区索引：忽略 .agent-runs、.git、node_modules、.next 和真实 .env 文件，只暴露文本文件路径。",
     "只读工具循环：模型可通过严格 JSON 协议请求 list_files、read_file、search_text、git_status。",
@@ -131,7 +139,8 @@
     "V0.12 在工具边界上增加本地 policy，让 prompt 暴露、runner 执行和 UI 展示都共享同一份策略快照。",
     "V0.13 把文件选择从简单列表推进到启发式评分，让模型第一眼看到的上下文变得可解释。",
     "V0.14 给模型协议增加错误分类和一次受控 repair retry，真实 agent 不能因为一次格式偏移就直接死掉。",
-    "V0.15 把 patchProposal 从完整文件内容预览推进到 diff 审查，让人工审批更接近真实 coding agent 的写入边界。"
+    "V0.15 把 patchProposal 从完整文件内容预览推进到 diff 审查，让人工审批更接近真实 coding agent 的写入边界。",
+    "V0.16 把验证结果接到补丁应用之后，让 coding agent 的下一轮能看到改动是否真的通过检查。"
   ],
   "contextDocuments": [
     {
@@ -173,6 +182,10 @@
     {
       "path": "docs/PATCH_DIFF.md",
       "description": "补丁 diff 预览和写入前风险审查说明。"
+    },
+    {
+      "path": "docs/VALIDATION_LOOP.md",
+      "description": "补丁应用后的验证闭环和 run history 写回说明。"
     }
   ],
   "roadmap": [
@@ -330,10 +343,10 @@
       "version": "V0.16",
       "theme": "验证闭环",
       "items": [
-        "补丁应用后可选自动验证",
-        "失败验证输出摘要",
-        "验证结果写回 run history",
-        "下一轮 resume 携带验证结论"
+        "Web 补丁应用后可选 typecheck/build/all",
+        "CLI --apply --validate 成功应用后验证",
+        "TUI v 键运行 typecheck",
+        "下一轮 resume 携带验证触发来源和失败摘要"
       ]
     },
     {

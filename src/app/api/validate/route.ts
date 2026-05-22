@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   isValidationCommandName,
+  isValidationTrigger,
   runValidationCommand
 } from "@/lib/agent/validation";
 import { appendValidationToRun } from "@/lib/agent/run-store";
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
 
   const command = readCommand(payload);
   const runId = readRunId(payload);
+  const trigger = readTrigger(payload);
 
   if (!isValidationCommandName(command)) {
     return NextResponse.json(
@@ -29,7 +31,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = await runValidationCommand(process.cwd(), command);
+  const result = await runValidationCommand(process.cwd(), command, { trigger });
 
   if (runId) {
     await appendValidationToRun(process.cwd(), runId, result);
@@ -53,4 +55,13 @@ function readRunId(payload: unknown) {
 
   const value = (payload as { runId?: unknown }).runId;
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readTrigger(payload: unknown) {
+  if (!payload || typeof payload !== "object" || !("trigger" in payload)) {
+    return "manual";
+  }
+
+  const value = (payload as { trigger?: unknown }).trigger;
+  return isValidationTrigger(value) ? value : "manual";
 }

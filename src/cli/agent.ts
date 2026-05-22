@@ -113,7 +113,7 @@ async function main() {
   }
 
   const patchResult = await maybeApplyPatch(workspaceRoot, result, options);
-  const validations = await runRequestedValidations(workspaceRoot, options);
+  const validations = await runRequestedValidations(workspaceRoot, options, patchResult);
 
   if (saved) {
     for (const validation of validations) {
@@ -364,21 +364,34 @@ async function confirmPatchApply(
   }
 }
 
-async function runRequestedValidations(workspaceRoot: string, options: CliOptions) {
+async function runRequestedValidations(
+  workspaceRoot: string,
+  options: CliOptions,
+  patchResult: CliPatchApplyResult | null
+) {
   const results: ValidationRunResult[] = [];
 
   if (options.validate.length === 0) {
     return results;
   }
 
+  if (options.apply && (!patchResult || !patchResult.ok)) {
+    if (!options.json) {
+      console.log("Skipping validation because patch was not applied.");
+    }
+
+    return results;
+  }
+
   const { runValidationCommand } = await import("../lib/agent/validation");
+  const trigger = options.apply ? "post_patch" : "manual";
 
   for (const command of options.validate) {
     if (!options.json) {
       console.log(`Running validation: ${command}`);
     }
 
-    results.push(await runValidationCommand(workspaceRoot, command));
+    results.push(await runValidationCommand(workspaceRoot, command, { trigger }));
   }
 
   return results;
@@ -436,7 +449,7 @@ function printValidationResults(results: ValidationRunResult[], options: CliOpti
 
   for (const result of results) {
     console.log(
-      `- ${result.ok ? "ok" : "failed"} ${result.displayCommand} (${result.durationMs}ms)`
+      `- ${result.ok ? "ok" : "failed"} ${result.displayCommand} trigger=${result.trigger ?? "manual"} (${result.durationMs}ms)`
     );
 
     if (!result.ok) {
@@ -545,7 +558,7 @@ function printRunRecord(record: AgentRunRecord, options: CliOptions) {
     console.log("Validations");
     for (const validation of record.validations) {
       console.log(
-        `- ${validation.ok ? "ok" : "failed"} ${validation.displayCommand} (${validation.durationMs}ms)`
+        `- ${validation.ok ? "ok" : "failed"} ${validation.displayCommand} trigger=${validation.trigger ?? "manual"} (${validation.durationMs}ms)`
       );
     }
   }
@@ -661,7 +674,7 @@ Options:
   --trace          Print detailed agent trace entries.
   --apply          Ask before applying a returned patch proposal.
   -y, --yes        Confirm --apply without an interactive prompt.
-  --validate <x>   Run typecheck, build, or all after the agent run.
+  --validate <x>   Run typecheck, build, or all. With --apply, run after a successful patch apply.
   --recent         List recent saved runs.
   --limit <n>      Limit --recent output. Defaults to 10.
   --show <run-id>  Show one saved run.

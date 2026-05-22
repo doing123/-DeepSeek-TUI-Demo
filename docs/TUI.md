@@ -14,6 +14,10 @@ V0.15 adds a compact patch diff line in the result area. When a run returns a
 patch preview, the TUI shows `Diff: +added/-removed` before the user presses `a`
 to apply the proposal.
 
+V0.16 adds `v` for a lightweight validation loop. After applying a patch with
+`a`, pressing `v` runs `typecheck`, stores it against the latest run, and marks
+the result as `post_patch`.
+
 ```bash
 npm run tui
 npm run tui -- "查看当前仓库状态"
@@ -26,6 +30,7 @@ npm run tui -- "查看当前仓库状态"
 - `up` / `down`: select a saved run
 - `c`: continue from the selected saved run
 - `a`: apply the latest patch proposal through the safe patch module
+- `v`: validate the latest run with `typecheck`
 - `q` / `esc`: quit
 
 ## Smoke Test
@@ -73,3 +78,9 @@ Tune it with `AGENT_PROTOCOL_REPAIR_MAX_ATTEMPTS`.
 The TUI does not render a full file-by-file diff yet. It shows the run-level
 addition/deletion summary from `patchPreview`, while `a` still routes through the
 same safe patch application module and human approval boundary.
+
+## Validation Loop
+
+The TUI keeps validation intentionally small: `v` runs the fixed `typecheck`
+command and appends the result to `.agent-runs`. If a patch was just applied for
+the latest result, the validation trigger is saved as `post_patch`.

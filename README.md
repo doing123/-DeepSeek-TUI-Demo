@@ -22,7 +22,7 @@ Open http://localhost:3000 and run a goal from the workbench.
 
 ## Architecture
 
-![Architecture v0.15.0](docs/architecture/architecture-v0.15.0.svg)
+![Architecture v0.16.0](docs/architecture/architecture-v0.16.0.svg)
 
 - **Next.js App**: 负责输入任务、展示 agent trace、展示实时事件、结构化建议和续接历史运行。
 - **CLI/TUI Shell**: 通过 npm run agent 和 npm run tui 复用 agent runner，提供终端入口、事件流、token 输出、运行历史回看和续接。
@@ -32,6 +32,7 @@ Open http://localhost:3000 and run a goal from the workbench.
 - **Context Selection**: 根据用户目标、路径、模块类型和文件大小为工作区文件打分，生成可解释的初始上下文。
 - **Tool Policy**: 从环境变量生成本地工具策略，限制模型可请求的只读工具，并控制是否允许 patchProposal。
 - **Patch Diff Preview**: 在人工审批写入前，服务端计算 patchProposal 的行级摘要、风险标签和紧凑 diff 片段。
+- **Validation Loop**: 在补丁被人工应用后运行白名单验证命令，并把验证结果写回 run history 和 resume 上下文。
 - **DeepSeek Provider**: 封装 OpenAI-compatible chat completions 和 SSE token streaming。
 - **Workspace Tools**: 当前支持带预算和策略限制的安全只读扫描、文件读取、文本搜索和 Git 状态读取，后续扩展 write_patch、run_command。
 - **README Generator**: 从项目规划数据和 package scripts 生成 README，并由 pre-commit hook 自动执行。
@@ -69,6 +70,10 @@ Architecture snapshots are stored in `docs/architecture/` for version-to-version
 - Patch 策略：AGENT_PATCH_PROPOSAL=disabled 时，runner 会移除模型返回的 patchProposal。
 - Patch diff：runner 在 final answer 包含 patchProposal 时生成服务端 diff 预览。
 - 写入风险视图：CLI、Web、TUI 展示补丁 additions/deletions、风险标签和 diff 片段。
+- 应用后验证：Web 可在应用补丁后自动运行 typecheck、build、all 或跳过。
+- CLI 验证闭环：npm run agent -- --apply --validate 只在补丁成功应用后运行验证。
+- TUI 验证入口：按 v 对最新运行执行 typecheck，并把结果写回 run history。
+- 验证触发来源：ValidationRunResult 记录 manual 或 post_patch，方便续接时理解验证语境。
 - 离线模式：没有 API key 时仍能返回本地规划结果。
 - 工作区索引：忽略 .agent-runs、.git、node_modules、.next 和真实 .env 文件，只暴露文本文件路径。
 - 只读工具循环：模型可通过严格 JSON 协议请求 list_files、read_file、search_text、git_status。
@@ -132,6 +137,7 @@ Sources:
 - V0.13 把文件选择从简单列表推进到启发式评分，让模型第一眼看到的上下文变得可解释。
 - V0.14 给模型协议增加错误分类和一次受控 repair retry，真实 agent 不能因为一次格式偏移就直接死掉。
 - V0.15 把 patchProposal 从完整文件内容预览推进到 diff 审查，让人工审批更接近真实 coding agent 的写入边界。
+- V0.16 把验证结果接到补丁应用之后，让 coding agent 的下一轮能看到改动是否真的通过检查。
 
 ## Development Context
 
@@ -145,6 +151,7 @@ Sources:
 - `docs/CONTEXT_SELECTION.md`: 文件优先级和初始上下文选择说明。
 - `docs/MODEL_PROTOCOL.md`: 模型 JSON 协议、错误分类和修复重试说明。
 - `docs/PATCH_DIFF.md`: 补丁 diff 预览和写入前风险审查说明。
+- `docs/VALIDATION_LOOP.md`: 补丁应用后的验证闭环和 run history 写回说明。
 
 ## Roadmap
 
@@ -255,10 +262,10 @@ Sources:
 
 ### V0.16 · 验证闭环
 
-- 补丁应用后可选自动验证
-- 失败验证输出摘要
-- 验证结果写回 run history
-- 下一轮 resume 携带验证结论
+- Web 补丁应用后可选 typecheck/build/all
+- CLI --apply --validate 成功应用后验证
+- TUI v 键运行 typecheck
+- 下一轮 resume 携带验证触发来源和失败摘要
 
 ### V0.17 · 会话模式与 TUI 体验
 

@@ -176,9 +176,12 @@ export type PatchApplyResult = {
 
 export type ValidationCommandName = "typecheck" | "build";
 
+export type ValidationTrigger = "manual" | "post_patch";
+
 export type ValidationRunResult = {
   ok: boolean;
   command: ValidationCommandName;
+  trigger?: ValidationTrigger;
   displayCommand: string;
   exitCode: number | null;
   stdout: string;

@@ -21,6 +21,10 @@ V0.15 adds patch diff review output. When a returned `patchProposal` can be
 previewed, CLI output prints total additions/deletions, per-file risk tags, and a
 compact diff snippet before any write approval prompt.
 
+V0.16 tightens validation into a post-patch loop. If `--apply` and `--validate`
+are used together, validation runs only after the patch was successfully applied
+and is stored with `trigger=post_patch`.
+
 ## Usage
 
 ```bash
@@ -45,7 +49,8 @@ Ask before applying a returned patch proposal:
 npm run agent -- --apply "实现一个小改动"
 ```
 
-Run whitelisted validation commands after the agent run:
+Run whitelisted validation commands after the agent run, or after a successful
+patch apply when combined with `--apply`:
 
 ```bash
 npm run agent -- --validate typecheck "检查类型风险"
@@ -91,6 +96,7 @@ npm run agent -- --json "查看当前仓库有哪些风险"
   runner produced a preview, and the CLI reuses the same path and action
   validation as the browser patch API.
 - Validation commands are still whitelist-only: `typecheck`, `build`, or `all`.
+  With `--apply`, they are skipped if the patch is not applied.
 - Git context is exposed through the fixed read-only `git_status` tool.
 - Tool policy is controlled by `AGENT_ALLOWED_READ_TOOLS` and
   `AGENT_PATCH_PROPOSAL`. The prompt and runner use the same policy snapshot.

@@ -1,5 +1,5 @@
 import { execFile } from "child_process";
-import type { ValidationCommandName, ValidationRunResult } from "./types";
+import type { ValidationCommandName, ValidationRunResult, ValidationTrigger } from "./types";
 
 // Validation commands are intentionally fixed server-side.
 // The model and browser can select a known command name, but cannot provide
@@ -28,10 +28,15 @@ export function isValidationCommandName(value: unknown): value is ValidationComm
   return value === "typecheck" || value === "build";
 }
 
+export function isValidationTrigger(value: unknown): value is ValidationTrigger {
+  return value === "manual" || value === "post_patch";
+}
+
 // Runs one whitelisted npm validation command without shell interpolation.
 export async function runValidationCommand(
   workspaceRoot: string,
-  command: ValidationCommandName
+  command: ValidationCommandName,
+  options: { trigger?: ValidationTrigger } = {}
 ): Promise<ValidationRunResult> {
   const startedAt = new Date();
   const definition = VALIDATION_COMMANDS[command];
@@ -56,6 +61,7 @@ export async function runValidationCommand(
         resolve({
           ok: !error,
           command,
+          trigger: options.trigger ?? "manual",
           displayCommand: definition.displayCommand,
           exitCode,
           stdout: trimOutput(stdout),

@@ -33,7 +33,8 @@ body {
 }
 
 button,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -505,10 +506,32 @@ button {
   gap: 14px;
   align-items: flex-start;
   justify-content: space-between;
+  flex-wrap: wrap;
 }
 
 .patch-heading h3 {
   margin-bottom: 6px;
+}
+
+.patch-review-controls {
+  display: grid;
+  gap: 6px;
+  min-width: 160px;
+}
+
+.patch-review-controls label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.patch-review-controls select {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  padding: 0 10px;
 }
 
 .patch-files {
@@ -561,6 +584,12 @@ button {
   border-color: #b7ddc6;
   background: #e4f2ea;
   color: var(--ok);
+}
+
+.post-apply-validations {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .trace-code {

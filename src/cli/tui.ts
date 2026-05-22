@@ -10,14 +10,17 @@ import { buildResumePromptGoal } from "../lib/agent/resume";
 import { runCodingAgent } from "../lib/agent/runner";
 import { describeToolPolicy } from "../lib/agent/tool-policy";
 import {
+  appendValidationToRun,
   listAgentRunSummaries,
   readAgentRunRecord,
   saveAgentRunRecord
 } from "../lib/agent/run-store";
+import { runValidationCommand } from "../lib/agent/validation";
 import type {
   AgentRunEvent,
   AgentRunResult,
-  AgentRunSummary
+  AgentRunSummary,
+  ValidationRunResult
 } from "../lib/agent/types";
 
 type TuiOptions = {
@@ -38,6 +41,8 @@ type TuiState = {
   events: string[];
   toolEvents: string[];
   streamText: string;
+  lastPatchAppliedRunId?: string;
+  lastValidation?: ValidationRunResult;
   result?: AgentRunResult;
 };
 
@@ -174,6 +179,12 @@ async function runInteractiveTui(state: TuiState) {
       return;
     }
 
+    if (key.name === "v") {
+      await validateLatestRun(state);
+      render(state);
+      return;
+    }
+
     if (key.name === "r" || key.name === "return") {
       await runTuiAgent(state);
       render(state);
@@ -213,6 +224,8 @@ async function runTuiAgent(state: TuiState) {
   state.events = [];
   state.toolEvents = [];
   state.streamText = "";
+  state.lastPatchAppliedRunId = undefined;
+  state.lastValidation = undefined;
   state.result = undefined;
   render(state);
 
@@ -280,7 +293,7 @@ function render(state: TuiState) {
   lines.push(`Workspace: ${truncate(state.workspaceRoot, width - 11)}`);
   lines.push("");
   lines.push(row("Goal", state.goal, leftWidth, "Live Events", state.status, rightWidth));
-  lines.push(row("Keys", "r run · n edit · ↑↓ select · c continue · a apply patch · q quit", leftWidth, "", "", rightWidth));
+  lines.push(row("Keys", "r run · n edit · ↑↓ select · c continue · a apply · v validate · q quit", leftWidth, "", "", rightWidth));
   lines.push(row("Resume", state.resumeRunId ?? "none", leftWidth, "", "", rightWidth));
   lines.push(row("Tool Calls", formatToolSummary(state), leftWidth, "Policy", formatPolicySummary(state.result), rightWidth));
   lines.push(row("Context", formatContextSummary(state.result), leftWidth, "", "", rightWidth));
@@ -321,6 +334,10 @@ function render(state: TuiState) {
 
     if (state.result.patchPreview) {
       lines.push(color(`Diff: +${state.result.patchPreview.totalAdditions}/-${state.result.patchPreview.totalDeletions}`, "cyan"));
+    }
+
+    if (state.lastValidation) {
+      lines.push(color(`Validation: ${state.lastValidation.ok ? "ok" : "failed"} ${state.lastValidation.displayCommand} (${state.lastValidation.trigger ?? "manual"})`, state.lastValidation.ok ? "green" : "cyan"));
     }
 
     if (state.result.toolPolicy) {
@@ -412,10 +429,29 @@ async function applyLatestPatch(state: TuiState) {
   const result = await applyPatchProposal(state.workspaceRoot, proposal);
 
   if (result.ok) {
-    state.status = `Patch applied: ${result.appliedFiles.join(", ")}`;
+    state.lastPatchAppliedRunId = state.result?.id;
+    state.status = `Patch applied: ${result.appliedFiles.join(", ")}; press v to validate`;
   } else {
     state.status = `Patch not applied: ${result.errors.join("; ")}`;
   }
+}
+
+async function validateLatestRun(state: TuiState) {
+  if (!state.result) {
+    state.status = "No latest run to validate";
+    return;
+  }
+
+  const trigger = state.lastPatchAppliedRunId === state.result.id ? "post_patch" : "manual";
+
+  state.status = "Running typecheck";
+  render(state);
+
+  const validation = await runValidationCommand(state.workspaceRoot, "typecheck", { trigger });
+  await appendValidationToRun(state.workspaceRoot, state.result.id, validation);
+  state.recentRuns = await listAgentRunSummaries(state.workspaceRoot);
+  state.lastValidation = validation;
+  state.status = `${validation.ok ? "Validation passed" : "Validation failed"}: ${validation.displayCommand}`;
 }
 
 async function loadLocalEnv(workspaceRoot: string) {

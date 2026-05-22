@@ -6,7 +6,25 @@ All notable project changes are tracked here.
 
 ### Notes
 
-- Next planned focus: validation loop after patch application.
+- Next planned focus: TUI session modes and a closer DeepSeek-TUI interaction loop.
+
+## 0.16.0 - 2026-05-22
+
+### Added
+
+- Added validation trigger metadata so run history can distinguish manual checks from post-patch checks.
+- Added Web post-apply validation selection for `typecheck`, `build`, `all`, or skip.
+- Added TUI `v` key to run a typecheck for the latest run and store the result.
+- Added compact validation failure output to resume context.
+- Added `docs/VALIDATION_LOOP.md` for the current post-patch validation flow.
+
+### Changed
+
+- CLI `--apply --validate` now runs validation only after a patch is successfully applied.
+- Web patch application now can immediately run whitelisted validation and write the result back to run history.
+- TUI patch application now marks the latest run for post-patch validation.
+- Updated handoff context, project planning, and generated architecture snapshots for V0.16.
+- Bumped project version to `0.16.0`.
 
 ## 0.15.0 - 2026-05-22
 

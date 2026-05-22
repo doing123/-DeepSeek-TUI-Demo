@@ -13,6 +13,7 @@ import type {
   ProtocolRepairPolicy,
   ToolPolicySnapshot,
   ValidationCommandName,
+  ValidationTrigger,
   ValidationRunResult
 } from "@/lib/agent/types";
 
@@ -216,7 +217,11 @@ export function AgentWorkbench() {
         {error ? (
           <div className="panel error">{error}</div>
         ) : result ? (
-          <AgentResultView result={result} record={selectedRecord} />
+          <AgentResultView
+            result={result}
+            record={selectedRecord}
+            onValidationComplete={handleValidationComplete}
+          />
         ) : isRunning || liveEvents.length > 0 || streamText ? (
           <LiveRunView events={liveEvents} streamText={streamText} />
         ) : (
@@ -364,10 +369,12 @@ function RecentRunsPanel({
 
 function AgentResultView({
   result,
-  record
+  record,
+  onValidationComplete
 }: {
   result: AgentRunResult;
   record: AgentRunRecord | null;
+  onValidationComplete: (runId?: string) => Promise<void>;
 }) {
   return (
     <div className="output-grid">
@@ -427,7 +434,12 @@ function AgentResultView({
         </section>
 
         {result.answer.patchProposal ? (
-          <PatchPreview proposal={result.answer.patchProposal} diff={result.patchPreview} />
+          <PatchPreview
+            proposal={result.answer.patchProposal}
+            diff={result.patchPreview}
+            runId={result.id}
+            onValidationComplete={onValidationComplete}
+          />
         ) : null}
 
         {result.rawText ? (
@@ -542,7 +554,7 @@ function AgentResultView({
                 <li key={`${validation.command}-${validation.startedAt}`}>
                   <span className="step-title">{validation.displayCommand}</span>
                   <span className="step-meta">
-                    {validation.ok ? "通过" : "失败"} · {validation.durationMs}ms
+                    {validation.trigger ?? "manual"} · {validation.ok ? "通过" : "失败"} · {validation.durationMs}ms
                   </span>
                 </li>
               ))}
@@ -583,22 +595,33 @@ function AgentResultView({
   );
 }
 
+type PostApplyValidationTarget = "none" | ValidationCommandName | "all";
+
 // Human approval boundary for writes. The model can propose file changes, but
 // this component requires a user confirmation before calling the apply API.
 function PatchPreview({
   proposal,
-  diff
+  diff,
+  runId,
+  onValidationComplete
 }: {
   proposal: PatchProposal;
   diff?: PatchDiffPreview;
+  runId: string;
+  onValidationComplete: (runId?: string) => Promise<void>;
 }) {
   const [isApplying, setIsApplying] = useState(false);
   const [applyResult, setApplyResult] = useState<PatchApplyResult | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
+  const [postApplyValidationTarget, setPostApplyValidationTarget] =
+    useState<PostApplyValidationTarget>("typecheck");
+  const [isPostApplyValidating, setIsPostApplyValidating] = useState(false);
+  const [postApplyValidations, setPostApplyValidations] = useState<ValidationRunResult[]>([]);
+  const [postApplyValidationError, setPostApplyValidationError] = useState<string | null>(null);
 
   async function applyPatch() {
     const confirmed = window.confirm(
-      `确认应用这个补丁吗？将写入 ${proposal.files.length} 个文件。`
+      `确认应用这个补丁吗？将写入 ${proposal.files.length} 个文件。应用后验证：${formatPostApplyValidationTarget(postApplyValidationTarget)}。`
     );
 
     if (!confirmed) {
@@ -608,6 +631,8 @@ function PatchPreview({
     setIsApplying(true);
     setApplyError(null);
     setApplyResult(null);
+    setPostApplyValidations([]);
+    setPostApplyValidationError(null);
 
     try {
       const response = await fetch("/api/patch/apply", {
@@ -622,6 +647,11 @@ function PatchPreview({
 
       if ("ok" in payload) {
         setApplyResult(payload);
+
+        if (payload.ok) {
+          await runPostApplyValidations();
+        }
+
         return;
       }
 
@@ -630,6 +660,31 @@ function PatchPreview({
       setApplyError(error instanceof Error ? error.message : "Patch apply failed");
     } finally {
       setIsApplying(false);
+    }
+  }
+
+  async function runPostApplyValidations() {
+    const commands = toPostApplyValidationCommands(postApplyValidationTarget);
+
+    if (commands.length === 0) {
+      return;
+    }
+
+    setIsPostApplyValidating(true);
+
+    try {
+      for (const command of commands) {
+        const validation = await requestValidation(command, runId, "post_patch");
+        setPostApplyValidations((current) => [...current, validation]);
+      }
+
+      await onValidationComplete(runId);
+    } catch (error) {
+      setPostApplyValidationError(
+        error instanceof Error ? error.message : "Post-apply validation failed"
+      );
+    } finally {
+      setIsPostApplyValidating(false);
     }
   }
 
@@ -649,13 +704,29 @@ function PatchPreview({
             </div>
           ) : null}
         </div>
+        <div className="patch-review-controls">
+          <label htmlFor={`post-apply-validation-${runId}`}>应用后验证</label>
+          <select
+            id={`post-apply-validation-${runId}`}
+            value={postApplyValidationTarget}
+            onChange={(event) =>
+              setPostApplyValidationTarget(event.target.value as PostApplyValidationTarget)
+            }
+            disabled={isApplying || isPostApplyValidating || applyResult?.ok}
+          >
+            <option value="typecheck">Typecheck</option>
+            <option value="build">Build</option>
+            <option value="all">Typecheck + Build</option>
+            <option value="none">跳过</option>
+          </select>
+        </div>
         <button
           className="primary"
           type="button"
           onClick={applyPatch}
-          disabled={isApplying || applyResult?.ok}
+          disabled={isApplying || isPostApplyValidating || applyResult?.ok}
         >
-          {isApplying ? "应用中" : applyResult?.ok ? "已应用" : "应用补丁"}
+          {isApplying || isPostApplyValidating ? "处理中" : applyResult?.ok ? "已应用" : "应用补丁"}
         </button>
       </div>
 
@@ -692,9 +763,49 @@ function PatchPreview({
         </div>
       ) : null}
 
+      {postApplyValidations.length > 0 || isPostApplyValidating ? (
+        <div className="post-apply-validations">
+          <strong>{isPostApplyValidating ? "验证中" : "应用后验证"}</strong>
+          {postApplyValidations.map((validation) => (
+            <div
+              className={validation.ok ? "validation-result validation-result--ok" : "validation-result"}
+              key={`${validation.command}-${validation.startedAt}`}
+            >
+              <span>{validation.displayCommand}</span>
+              <span>{validation.ok ? "通过" : `失败 (${validation.exitCode ?? "unknown"})`}</span>
+              <pre>{formatValidationOutput(validation)}</pre>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {postApplyValidationError ? (
+        <div className="apply-result">{postApplyValidationError}</div>
+      ) : null}
+
       {applyError ? <div className="apply-result">{applyError}</div> : null}
     </section>
   );
+}
+
+function toPostApplyValidationCommands(target: PostApplyValidationTarget): ValidationCommandName[] {
+  if (target === "all") {
+    return ["typecheck", "build"];
+  }
+
+  return target === "none" ? [] : [target];
+}
+
+function formatPostApplyValidationTarget(target: PostApplyValidationTarget) {
+  if (target === "all") {
+    return "Typecheck + Build";
+  }
+
+  if (target === "none") {
+    return "跳过";
+  }
+
+  return target === "typecheck" ? "Typecheck" : "Build";
 }
 
 function PatchFileDiffView({ diff }: { diff: PatchDiffPreview["files"][number] }) {
@@ -733,23 +844,9 @@ function ValidationPanel({
     setResult(null);
 
     try {
-      const response = await fetch("/api/validate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ command, runId })
-      });
-
-      const payload = (await response.json()) as ValidationRunResult | { error?: string };
-
-      if ("command" in payload) {
-        setResult(payload);
-        await onValidationComplete(runId);
-        return;
-      }
-
-      throw new Error(payload.error ?? "Validation failed");
+      const validation = await requestValidation(command, runId, "manual");
+      setResult(validation);
+      await onValidationComplete(runId);
     } catch (runError) {
       setError(runError instanceof Error ? runError.message : "Validation failed");
     } finally {
@@ -790,6 +887,28 @@ function ValidationPanel({
       {error ? <div className="validation-result">{error}</div> : null}
     </section>
   );
+}
+
+async function requestValidation(
+  command: ValidationCommandName,
+  runId: string | undefined,
+  trigger: ValidationTrigger
+) {
+  const response = await fetch("/api/validate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ command, runId, trigger })
+  });
+
+  const payload = (await response.json()) as ValidationRunResult | { error?: string };
+
+  if ("command" in payload) {
+    return payload;
+  }
+
+  throw new Error(payload.error ?? "Validation failed");
 }
 
 async function consumeAgentEventStream(
