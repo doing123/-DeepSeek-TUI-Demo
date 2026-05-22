@@ -4,6 +4,7 @@ import { createInterface } from "readline/promises";
 import { pathToFileURL } from "url";
 import { describeContextBudget } from "../lib/agent/context-budget";
 import { describeContextSelection } from "../lib/agent/context-selection";
+import { describeProtocolRepairPolicy } from "../lib/agent/model-protocol";
 import { buildResumePromptGoal, formatResumeTitle } from "../lib/agent/resume";
 import { describeToolPolicy } from "../lib/agent/tool-policy";
 import type {
@@ -465,12 +466,19 @@ function printAgentResult(result: AgentRunResult | StoredAgentRunResult, options
   if (result.toolPolicy) {
     console.log(`Tool policy: ${describeToolPolicy(result.toolPolicy)}`);
   }
+  if (result.protocolRepairPolicy) {
+    console.log(`Protocol repair: ${describeProtocolRepairPolicy(result.protocolRepairPolicy)}`);
+  }
+  if (typeof result.protocolRepairCount === "number") {
+    console.log(`Protocol repair attempts: ${result.protocolRepairCount}`);
+  }
   console.log(`Tool calls: ${result.toolCallCount}`);
   console.log("");
 
   printList("Plan", result.answer.plan);
   printList("Files To Inspect", result.answer.filesToInspect);
   printContextSelection(result);
+  printProtocolErrors(result);
   printList("Proposed Changes", result.answer.proposedChanges);
   printList("Risks", result.answer.risks);
   printList("Next Actions", result.answer.nextActions);
@@ -479,6 +487,20 @@ function printAgentResult(result: AgentRunResult | StoredAgentRunResult, options
   if (options.trace) {
     printTrace(result);
   }
+}
+
+function printProtocolErrors(result: AgentRunResult | StoredAgentRunResult) {
+  if (!result.protocolErrors?.length) {
+    return;
+  }
+
+  console.log("Protocol Errors");
+  for (const error of result.protocolErrors) {
+    console.log(
+      `- ${error.code}: ${error.reason} repair=${error.repairAttempted ? "attempted" : "skipped"}`
+    );
+  }
+  console.log("");
 }
 
 function printContextSelection(result: AgentRunResult | StoredAgentRunResult) {

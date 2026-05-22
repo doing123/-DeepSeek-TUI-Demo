@@ -106,6 +106,9 @@ function toStoredRunResult(result: AgentRunResult): StoredAgentRunResult {
     contextBudget: result.contextBudget,
     contextSelection: result.contextSelection,
     toolPolicy: result.toolPolicy,
+    protocolRepairPolicy: result.protocolRepairPolicy,
+    protocolRepairCount: result.protocolRepairCount,
+    protocolErrors: result.protocolErrors,
     toolCallCount: result.toolCallCount,
     answer
   };

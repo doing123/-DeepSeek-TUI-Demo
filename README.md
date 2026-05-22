@@ -22,12 +22,13 @@ Open http://localhost:3000 and run a goal from the workbench.
 
 ## Architecture
 
-![Architecture v0.13.0](docs/architecture/architecture-v0.13.0.svg)
+![Architecture v0.14.0](docs/architecture/architecture-v0.14.0.svg)
 
 - **Next.js App**: 负责输入任务、展示 agent trace、展示实时事件、结构化建议和续接历史运行。
 - **CLI/TUI Shell**: 通过 npm run agent 和 npm run tui 复用 agent runner，提供终端入口、事件流、token 输出、运行历史回看和续接。
 - **API Route**: 运行在 Node.js 服务端，提供 JSON 和 SSE 两种 agent 请求入口。
-- **Agent Runner**: 组织任务理解、上下文预算、上下文选择、工具策略、仓库扫描、LLM 调用、事件总线、结果解析。
+- **Agent Runner**: 组织任务理解、上下文预算、上下文选择、工具策略、协议修复、仓库扫描、LLM 调用、事件总线、结果解析。
+- **Model Protocol**: 定义 tool_call/final JSON 协议，记录协议错误，并在失败时最多执行一次受控修复重试。
 - **Context Selection**: 根据用户目标、路径、模块类型和文件大小为工作区文件打分，生成可解释的初始上下文。
 - **Tool Policy**: 从环境变量生成本地工具策略，限制模型可请求的只读工具，并控制是否允许 patchProposal。
 - **DeepSeek Provider**: 封装 OpenAI-compatible chat completions 和 SSE token streaming。
@@ -59,6 +60,9 @@ Architecture snapshots are stored in `docs/architecture/` for version-to-version
 - 上下文预算：AGENT_CONTEXT_* 环境变量控制文件索引、文件读取、搜索范围和工具输出长度。
 - 上下文选择：AGENT_CONTEXT_SELECTED_MAX_FILES 控制初始 prompt 文件地图数量。
 - 文件优先级：runner 会根据目标词、路径、模块类型和文件大小生成可解释的文件评分。
+- 模型协议：DeepSeek 输出必须符合 tool_call/final JSON 协议。
+- 协议修复：AGENT_PROTOCOL_REPAIR_* 控制模型协议错误后的受控修复重试。
+- 协议错误视图：CLI、Web、TUI 展示协议修复策略、修复次数和错误分类。
 - 工具边界：工具定义包含 category、risk、approvalRequired，当前模型只能请求低风险只读工具。
 - 工具策略：AGENT_ALLOWED_READ_TOOLS 可限制模型本轮能看到和请求的只读工具。
 - Patch 策略：AGENT_PATCH_PROPOSAL=disabled 时，runner 会移除模型返回的 patchProposal。
@@ -123,6 +127,7 @@ Sources:
 - V0.11 把 context budget 从隐含常量升级成显式运行配置，并把工具可调用边界写入类型和 prompt。
 - V0.12 在工具边界上增加本地 policy，让 prompt 暴露、runner 执行和 UI 展示都共享同一份策略快照。
 - V0.13 把文件选择从简单列表推进到启发式评分，让模型第一眼看到的上下文变得可解释。
+- V0.14 给模型协议增加错误分类和一次受控 repair retry，真实 agent 不能因为一次格式偏移就直接死掉。
 
 ## Development Context
 
@@ -134,6 +139,7 @@ Sources:
 - `docs/CONTEXT_BUDGET.md`: 上下文预算和工具边界说明。
 - `docs/TOOL_POLICY.md`: 工具策略、allowlist 和 patchProposal 策略说明。
 - `docs/CONTEXT_SELECTION.md`: 文件优先级和初始上下文选择说明。
+- `docs/MODEL_PROTOCOL.md`: 模型 JSON 协议、错误分类和修复重试说明。
 
 ## Roadmap
 
@@ -233,7 +239,7 @@ Sources:
 - 非 JSON 响应修复提示
 - 一次受控 retry
 - 协议错误分类
-- CLI/Web 展示修复过程
+- CLI/Web/TUI 展示修复过程
 
 ### V0.15 · 补丁 diff 预览
 

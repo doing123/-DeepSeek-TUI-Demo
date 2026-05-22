@@ -51,7 +51,7 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     {
       id: "runner",
       label: "Agent Runner",
-      detail: "目标理解 / context selection / tool policy / Event Bus",
+      detail: "context selection / protocol repair / tool policy",
       x: 790,
       y: 170,
       w: 300,
@@ -71,7 +71,7 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     {
       id: "prompt",
       label: "Prompt Protocol",
-      detail: "tool_call / final JSON / 高层步骤摘要",
+      detail: "tool_call / final JSON / repair prompt",
       x: 790,
       y: 345,
       w: 300,
@@ -246,6 +246,9 @@ function pickFeatureHighlights(features) {
       "上下文预算",
       "上下文选择",
       "文件优先级",
+      "模型协议",
+      "协议修复",
+      "协议错误视图",
       "工具边界",
       "工具策略",
       "Patch 策略",

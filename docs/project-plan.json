@@ -22,7 +22,11 @@
     },
     {
       "name": "Agent Runner",
-      "description": "组织任务理解、上下文预算、上下文选择、工具策略、仓库扫描、LLM 调用、事件总线、结果解析。"
+      "description": "组织任务理解、上下文预算、上下文选择、工具策略、协议修复、仓库扫描、LLM 调用、事件总线、结果解析。"
+    },
+    {
+      "name": "Model Protocol",
+      "description": "定义 tool_call/final JSON 协议，记录协议错误，并在失败时最多执行一次受控修复重试。"
     },
     {
       "name": "Context Selection",
@@ -67,6 +71,9 @@
     "上下文预算：AGENT_CONTEXT_* 环境变量控制文件索引、文件读取、搜索范围和工具输出长度。",
     "上下文选择：AGENT_CONTEXT_SELECTED_MAX_FILES 控制初始 prompt 文件地图数量。",
     "文件优先级：runner 会根据目标词、路径、模块类型和文件大小生成可解释的文件评分。",
+    "模型协议：DeepSeek 输出必须符合 tool_call/final JSON 协议。",
+    "协议修复：AGENT_PROTOCOL_REPAIR_* 控制模型协议错误后的受控修复重试。",
+    "协议错误视图：CLI、Web、TUI 展示协议修复策略、修复次数和错误分类。",
     "工具边界：工具定义包含 category、risk、approvalRequired，当前模型只能请求低风险只读工具。",
     "工具策略：AGENT_ALLOWED_READ_TOOLS 可限制模型本轮能看到和请求的只读工具。",
     "Patch 策略：AGENT_PATCH_PROPOSAL=disabled 时，runner 会移除模型返回的 patchProposal。",
@@ -116,7 +123,8 @@
     "V0.10 先用无依赖 ANSI alternate screen 做 TUI spike，验证终端布局和键盘事件，再决定是否引入专门 TUI 框架。",
     "V0.11 把 context budget 从隐含常量升级成显式运行配置，并把工具可调用边界写入类型和 prompt。",
     "V0.12 在工具边界上增加本地 policy，让 prompt 暴露、runner 执行和 UI 展示都共享同一份策略快照。",
-    "V0.13 把文件选择从简单列表推进到启发式评分，让模型第一眼看到的上下文变得可解释。"
+    "V0.13 把文件选择从简单列表推进到启发式评分，让模型第一眼看到的上下文变得可解释。",
+    "V0.14 给模型协议增加错误分类和一次受控 repair retry，真实 agent 不能因为一次格式偏移就直接死掉。"
   ],
   "contextDocuments": [
     {
@@ -150,6 +158,10 @@
     {
       "path": "docs/CONTEXT_SELECTION.md",
       "description": "文件优先级和初始上下文选择说明。"
+    },
+    {
+      "path": "docs/MODEL_PROTOCOL.md",
+      "description": "模型 JSON 协议、错误分类和修复重试说明。"
     }
   ],
   "roadmap": [
@@ -290,7 +302,7 @@
         "非 JSON 响应修复提示",
         "一次受控 retry",
         "协议错误分类",
-        "CLI/Web 展示修复过程"
+        "CLI/Web/TUI 展示修复过程"
       ]
     },
     {

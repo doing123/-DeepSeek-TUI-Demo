@@ -1,5 +1,7 @@
 import type {
   AgentMessage,
+  ModelProtocolError,
+  ProtocolRepairPolicy,
   ToolDefinition,
   ToolPolicySnapshot,
   ToolResult,
@@ -74,6 +76,41 @@ export function buildToolResultMessage(result: ToolResult): AgentMessage {
       {
         type: "tool_result",
         result
+      },
+      null,
+      2
+    )
+  };
+}
+
+export function buildProtocolRepairMessage({
+  error,
+  tools,
+  toolPolicy,
+  protocolRepairPolicy
+}: {
+  error: ModelProtocolError;
+  tools: ToolDefinition[];
+  toolPolicy: ToolPolicySnapshot;
+  protocolRepairPolicy: ProtocolRepairPolicy;
+}): AgentMessage {
+  return {
+    role: "user",
+    content: JSON.stringify(
+      {
+        type: "protocol_repair",
+        reason: error.reason,
+        code: error.code,
+        instruction: [
+          "上一条 assistant 响应没有遵循本 agent 的 JSON 协议。",
+          "请只返回一个严格 JSON 对象，不要解释，不要 Markdown 代码块。",
+          "如果还需要工具，返回 type=tool_call，工具名必须来自 allowedToolNames。",
+          "如果信息足够，返回 type=final，并使用 answer 字段。"
+        ],
+        allowedToolNames: tools.map((tool) => tool.name),
+        patchProposal: toolPolicy.patchProposal,
+        maxAttempts: protocolRepairPolicy.maxAttempts,
+        previousResponsePreview: error.rawTextPreview
       },
       null,
       2

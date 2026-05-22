@@ -10,8 +10,17 @@ import {
   hasDeepSeekKey,
   streamCompleteWithDeepSeek
 } from "./deepseek";
+import {
+  createModelProtocolError,
+  describeProtocolRepairPolicy,
+  getProtocolRepairPolicy
+} from "./model-protocol";
 import { normalizePatchProposal } from "./patches";
-import { buildCodingAgentMessages, buildToolResultMessage } from "./prompts";
+import {
+  buildCodingAgentMessages,
+  buildProtocolRepairMessage,
+  buildToolResultMessage
+} from "./prompts";
 import {
   describeToolPolicy,
   filterToolsByPolicy,
@@ -31,6 +40,9 @@ import type {
   AgentRunEvent,
   AgentRunResult,
   AgentStep,
+  ModelProtocolError,
+  ModelProtocolErrorCode,
+  ProtocolRepairPolicy,
   ToolPolicySnapshot,
   ToolCall,
   WorkspaceSnapshot
@@ -61,6 +73,7 @@ export async function runCodingAgent({
   const config = getDeepSeekConfig();
   const contextBudget = getContextBudget();
   const toolPolicy = getToolPolicy();
+  const protocolRepairPolicy = getProtocolRepairPolicy();
   const availableTools = filterToolsByPolicy(READ_ONLY_TOOL_DEFINITIONS, toolPolicy);
   const modelGoal = promptGoal ?? goal;
 
@@ -102,6 +115,17 @@ export async function runCodingAgent({
     steps,
     "应用工具策略",
     describeToolPolicy(toolPolicy),
+    {
+      kind: "system"
+    },
+    onEvent
+  );
+  completeLatestStep(steps, undefined, {}, onEvent);
+
+  pushStep(
+    steps,
+    "应用协议修复策略",
+    describeProtocolRepairPolicy(protocolRepairPolicy),
     {
       kind: "system"
     },
@@ -172,6 +196,9 @@ export async function runCodingAgent({
       contextBudget,
       contextSelection,
       toolPolicy,
+      protocolRepairPolicy,
+      protocolRepairCount: 0,
+      protocolErrors: [],
       toolCallCount: 0,
       answer: buildOfflineAnswer(snapshot.fileCount, contextSelection.selectedCount, toolPolicy)
     };
@@ -188,18 +215,22 @@ export async function runCodingAgent({
     MAX_TOOL_CALLS
   );
   let toolCallCount = 0;
+  let modelTurnCount = 0;
+  let protocolRepairCount = 0;
+  const protocolErrors: ModelProtocolError[] = [];
   let model = config.model;
   let rawText: string | undefined;
 
   while (toolCallCount <= MAX_TOOL_CALLS) {
+    modelTurnCount += 1;
     pushStep(
       steps,
       "调用 DeepSeek",
-      `第 ${toolCallCount + 1} 轮，模型：${config.model}，base URL：${config.baseUrl}`,
+      `第 ${modelTurnCount} 轮，模型：${config.model}，base URL：${config.baseUrl}`,
       { kind: "model" },
       onEvent
     );
-    const turn = toolCallCount + 1;
+    const turn = modelTurnCount;
     const completion = streamModel
       ? await completeWithStreaming(messages, config, turn, onEvent)
       : await completeWithDeepSeek(messages, config);
@@ -222,6 +253,9 @@ export async function runCodingAgent({
         startedAt,
         steps,
         snapshot,
+        protocolRepairPolicy,
+        protocolRepairCount,
+        protocolErrors,
         toolPolicy,
         toolCallCount,
         answer: applyToolPolicyToAnswer(parsed.answer, toolPolicy),
@@ -230,6 +264,43 @@ export async function runCodingAgent({
     }
 
     if (parsed.type === "invalid") {
+      const canRepair = protocolRepairCount < protocolRepairPolicy.maxAttempts;
+      const protocolError = createModelProtocolError({
+        code: parsed.code,
+        reason: parsed.reason,
+        rawText: completion.content,
+        repairAttempted: canRepair,
+        maxRawTextLength: protocolRepairPolicy.maxRawTextLength
+      });
+      protocolErrors.push(protocolError);
+
+      if (canRepair) {
+        protocolRepairCount += 1;
+        pushStep(
+          steps,
+          "修复模型协议",
+          `${parsed.reason} 正在请求模型只返回合法 tool_call/final JSON。`,
+          {
+            kind: "model",
+            ok: false
+          },
+          onEvent
+        );
+        messages.push(buildProtocolRepairMessage({
+          error: protocolError,
+          tools: availableTools,
+          toolPolicy,
+          protocolRepairPolicy
+        }));
+        completeLatestStep(
+          steps,
+          `已发送第 ${protocolRepairCount}/${protocolRepairPolicy.maxAttempts} 次协议修复提示。`,
+          {},
+          onEvent
+        );
+        continue;
+      }
+
       return completeRunResult({
         goal,
         resumeFromRunId,
@@ -237,9 +308,12 @@ export async function runCodingAgent({
         startedAt,
         steps,
         snapshot,
+        protocolRepairPolicy,
+        protocolRepairCount,
+        protocolErrors,
         toolPolicy,
         toolCallCount,
-        answer: buildInvalidResponseAnswer(parsed.reason, completion.content),
+        answer: buildInvalidResponseAnswer(parsed.reason, completion.content, protocolRepairCount),
         rawText: completion.content
       }, onEvent);
     }
@@ -252,6 +326,9 @@ export async function runCodingAgent({
         startedAt,
         steps,
         snapshot,
+        protocolRepairPolicy,
+        protocolRepairCount,
+        protocolErrors,
         toolPolicy,
         toolCallCount,
         answer: buildToolLimitAnswer(MAX_TOOL_CALLS),
@@ -267,6 +344,9 @@ export async function runCodingAgent({
         startedAt,
         steps,
         snapshot,
+        protocolRepairPolicy,
+        protocolRepairCount,
+        protocolErrors,
         toolPolicy,
         toolCallCount,
         answer: buildInvalidResponseAnswer(
@@ -313,6 +393,9 @@ export async function runCodingAgent({
     startedAt,
     steps,
     snapshot,
+    protocolRepairPolicy,
+    protocolRepairCount,
+    protocolErrors,
     toolPolicy,
     toolCallCount,
     answer: buildToolLimitAnswer(MAX_TOOL_CALLS),
@@ -371,6 +454,9 @@ function buildRunResult({
   steps,
   snapshot,
   contextSelection,
+  protocolRepairPolicy,
+  protocolRepairCount,
+  protocolErrors,
   toolPolicy,
   toolCallCount,
   answer,
@@ -383,6 +469,9 @@ function buildRunResult({
   steps: AgentStep[];
   snapshot: WorkspaceSnapshot;
   contextSelection?: WorkspaceSnapshot["contextSelection"];
+  protocolRepairPolicy: ProtocolRepairPolicy;
+  protocolRepairCount: number;
+  protocolErrors: ModelProtocolError[];
   toolPolicy: ToolPolicySnapshot;
   toolCallCount: number;
   answer: AgentAnswer;
@@ -403,6 +492,9 @@ function buildRunResult({
     },
     contextBudget: snapshot.contextBudget,
     contextSelection: contextSelection ?? snapshot.contextSelection,
+    protocolRepairPolicy,
+    protocolRepairCount,
+    protocolErrors,
     toolPolicy,
     toolCallCount,
     answer,
@@ -455,9 +547,9 @@ function buildOfflineAnswer(
   toolPolicy: ToolPolicySnapshot
 ): AgentAnswer {
   return {
-    title: "上下文选择已就绪",
+    title: "协议修复能力已就绪",
     summary:
-      "当前运行在离线模式。V0.13 已经具备只读工具循环、结构化补丁提案、人工确认后的安全应用入口、运行历史、终端 CLI/TUI、续接上下文、Agent Event Bus、DeepSeek token streaming、上下文预算、可配置工具策略和启发式文件优先级选择；配置 DEEPSEEK_API_KEY 后模型可以通过 CLI、TUI 或 Web 流式输出。",
+      "当前运行在离线模式。V0.14 已经具备只读工具循环、结构化补丁提案、人工确认后的安全应用入口、运行历史、终端 CLI/TUI、续接上下文、Agent Event Bus、DeepSeek token streaming、上下文预算、上下文选择、可配置工具策略和模型协议修复；配置 DEEPSEEK_API_KEY 后模型可以通过 CLI、TUI 或 Web 流式输出。",
     plan: [
       "把 Web UI 作为任务入口，收集用户的编码目标。",
       `服务端先索引当前工作区的 ${fileCount} 个文本文件，再选择 ${selectedFileCount} 个初始上下文候选。`,
@@ -468,7 +560,7 @@ function buildOfflineAnswer(
       "终端可通过 --stream 查看高层步骤事件，通过 --apply 审批补丁，通过 --validate 运行白名单验证。",
       "CLI 和 Web 都可以选择历史 run，把上一轮摘要、计划、风险、补丁元信息和验证结果作为本轮上下文。",
       "Web 流式 API 会发送 run、step、model token、tool call 和 run completed 事件。",
-      "V0.13 把初始上下文选择显式化，模型先看到一组带选择原因的优先文件，再通过只读工具继续探索。"
+      "V0.14 在模型输出不符合 JSON 协议时会记录错误分类，并最多发送一次受控修复提示。"
     ],
     filesToInspect: [
       "src/app/api/agent/route.ts",
@@ -482,13 +574,15 @@ function buildOfflineAnswer(
       "src/lib/agent/resume.ts",
       "src/lib/agent/context-budget.ts",
       "src/lib/agent/context-selection.ts",
+      "src/lib/agent/model-protocol.ts",
       "src/lib/agent/tool-policy.ts",
       "docs/CONTEXT_BUDGET.md",
       "docs/CONTEXT_SELECTION.md",
+      "docs/MODEL_PROTOCOL.md",
       "src/app/api/agent/stream/route.ts"
     ],
     proposedChanges: [
-      "V0.14 可以继续做模型响应修复和协议重试，让 DeepSeek 偶发非 JSON 输出时也能更稳地恢复。"
+      "V0.15 可以继续做补丁 diff 预览，让 patchProposal 应用前的变化更接近真实 coding agent。"
     ],
     risks: [
       "当前版本只读仓库，不会自动修改文件。",
@@ -503,6 +597,7 @@ function buildOfflineAnswer(
       "运行 npm run agent -- --stream \"查看当前仓库状态\" 测试终端 token streaming。",
       "调整 AGENT_CONTEXT_* 环境变量测试预算收敛效果。",
       "调整 AGENT_CONTEXT_SELECTED_MAX_FILES 测试初始上下文选择数量。",
+      "调整 AGENT_PROTOCOL_REPAIR_MAX_ATTEMPTS 测试协议修复策略。",
       "运行 npm run agent -- --continue <run-id> \"继续上一轮任务\" 测试恢复上下文。",
       "运行 npm run agent -- --validate typecheck \"检查当前实现\" 测试终端验证。"
     ]
@@ -544,11 +639,12 @@ type ParsedModelResponse =
     }
   | {
       type: "invalid";
+      code: ModelProtocolErrorCode;
       reason: string;
     };
 
 function parseModelResponse(content: string): ParsedModelResponse {
-  const normalized = stripJsonFence(content);
+  const normalized = normalizeJsonCandidate(content);
 
   try {
     const parsed = JSON.parse(normalized) as unknown;
@@ -556,6 +652,7 @@ function parseModelResponse(content: string): ParsedModelResponse {
     if (!isRecord(parsed)) {
       return {
         type: "invalid",
+        code: "top_level_not_object",
         reason: "模型返回的 JSON 顶层必须是对象。"
       };
     }
@@ -584,11 +681,13 @@ function parseModelResponse(content: string): ParsedModelResponse {
 
     return {
       type: "invalid",
+      code: "missing_type",
       reason: "模型返回的 JSON 缺少 type=tool_call 或 type=final。"
     };
   } catch {
     return {
       type: "invalid",
+      code: "non_json",
       reason: "模型返回了非 JSON 内容。"
     };
   }
@@ -598,6 +697,7 @@ function parseToolCall(value: unknown): ParsedModelResponse {
   if (!isRecord(value) || !isReadOnlyToolName(value.name)) {
     return {
       type: "invalid",
+      code: "invalid_tool_call",
       reason: "工具调用必须包含合法的 name。"
     };
   }
@@ -608,13 +708,17 @@ function parseToolCall(value: unknown): ParsedModelResponse {
   };
 }
 
-function buildInvalidResponseAnswer(reason: string, rawText: string): AgentAnswer {
+function buildInvalidResponseAnswer(
+  reason: string,
+  rawText: string,
+  protocolRepairCount = 0
+): AgentAnswer {
   return {
     title: "模型响应无法继续执行",
-    summary: `${reason}\n\n原始响应：${rawText}`,
+    summary: `${reason}\n\n协议修复尝试：${protocolRepairCount} 次\n\n原始响应：${rawText}`,
     plan: ["调整 prompt 或模型参数，让输出稳定遵循 tool_call/final JSON 协议。"],
     filesToInspect: ["src/lib/agent/prompts.ts", "src/lib/agent/runner.ts"],
-    proposedChanges: ["下一版可以增加 JSON 修复器或更细的模型响应校验错误提示。"],
+    proposedChanges: ["检查协议错误分类、repair prompt 和 DeepSeek JSON Output 配置。"],
     risks: ["模型没有遵循协议时，agent 会停止而不是猜测执行。"],
     nextActions: ["检查 rawText，必要时收紧 system prompt 或切换模型。"]
   };
@@ -655,12 +759,67 @@ function readRecord(value: unknown): Record<string, unknown> {
   return isRecord(value) ? value : {};
 }
 
-function stripJsonFence(content: string) {
-  return content
+function normalizeJsonCandidate(content: string) {
+  const stripped = content
     .trim()
     .replace(/^```(?:json)?/i, "")
     .replace(/```$/i, "")
     .trim();
+
+  if (stripped.startsWith("{") && stripped.endsWith("}")) {
+    return stripped;
+  }
+
+  return extractFirstJsonObject(stripped) ?? stripped;
+}
+
+function extractFirstJsonObject(content: string) {
+  const start = content.indexOf("{");
+
+  if (start < 0) {
+    return null;
+  }
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start; index < content.length; index += 1) {
+    const char = content[index];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+
+    if (char === "\"") {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) {
+      continue;
+    }
+
+    if (char === "{") {
+      depth += 1;
+    }
+
+    if (char === "}") {
+      depth -= 1;
+
+      if (depth === 0) {
+        return content.slice(start, index + 1);
+      }
+    }
+  }
+
+  return null;
 }
 
 function readString(value: unknown, fallback: string) {

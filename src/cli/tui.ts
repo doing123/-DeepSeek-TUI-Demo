@@ -4,6 +4,7 @@ import { emitKeypressEvents } from "readline";
 import { createInterface as createPrompt } from "readline/promises";
 import { pathToFileURL } from "url";
 import { describeContextSelection } from "../lib/agent/context-selection";
+import { describeProtocolRepairPolicy } from "../lib/agent/model-protocol";
 import { applyPatchProposal } from "../lib/agent/patches";
 import { buildResumePromptGoal } from "../lib/agent/resume";
 import { runCodingAgent } from "../lib/agent/runner";
@@ -283,6 +284,7 @@ function render(state: TuiState) {
   lines.push(row("Resume", state.resumeRunId ?? "none", leftWidth, "", "", rightWidth));
   lines.push(row("Tool Calls", formatToolSummary(state), leftWidth, "Policy", formatPolicySummary(state.result), rightWidth));
   lines.push(row("Context", formatContextSummary(state.result), leftWidth, "", "", rightWidth));
+  lines.push(row("Protocol", formatProtocolSummary(state.result), leftWidth, "", "", rightWidth));
   lines.push("");
 
   const recentLines = formatRecentRuns(state.recentRuns, state.selectedIndex, leftWidth);
@@ -323,6 +325,10 @@ function render(state: TuiState) {
 
     if (state.result.contextSelection) {
       lines.push(color(`Context: ${describeContextSelection(state.result.contextSelection)}`, "dim"));
+    }
+
+    if (state.result.protocolRepairPolicy) {
+      lines.push(color(`Protocol: ${describeProtocolRepairPolicy(state.result.protocolRepairPolicy)} repairs=${state.result.protocolRepairCount ?? 0}`, "dim"));
     }
   }
 
@@ -492,6 +498,14 @@ function formatContextSummary(result: AgentRunResult | undefined) {
   }
 
   return `${result.contextSelection.selectedCount}/${result.contextSelection.candidateCount} selected`;
+}
+
+function formatProtocolSummary(result: AgentRunResult | undefined) {
+  if (!result?.protocolRepairPolicy) {
+    return "available after run";
+  }
+
+  return `${result.protocolRepairCount ?? 0}/${result.protocolRepairPolicy.maxAttempts} repairs`;
 }
 
 function formatInlineJson(value: unknown) {

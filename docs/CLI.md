@@ -14,6 +14,9 @@ allowlist and patchProposal policy when the result includes policy metadata.
 V0.13 adds selected context output. CLI runs print the context-selection summary
 and the top selected files with scores and reasons.
 
+V0.14 adds model protocol repair output. CLI runs print the active repair policy,
+repair attempt count, and protocol errors when the model response needs repair.
+
 ## Usage
 
 ```bash
@@ -89,3 +92,5 @@ npm run agent -- --json "查看当前仓库有哪些风险"
 - Initial context selection is controlled by `AGENT_CONTEXT_SELECTED_MAX_FILES`.
   It is only the first prompt map; the model can still request more files
   through read-only tools.
+- Model protocol repair is controlled by `AGENT_PROTOCOL_REPAIR_MAX_ATTEMPTS`
+  and `AGENT_PROTOCOL_REPAIR_MAX_RAW_LENGTH`.

@@ -6,7 +6,25 @@ All notable project changes are tracked here.
 
 ### Notes
 
-- Next planned focus: model JSON repair, retry, and protocol stability.
+- Next planned focus: patch diff preview and clearer write-risk review.
+
+## 0.14.0 - 2026-05-22
+
+### Added
+
+- Added `src/lib/agent/model-protocol.ts` for model protocol repair policy and error snapshots.
+- Added `AGENT_PROTOCOL_REPAIR_MAX_ATTEMPTS` and `AGENT_PROTOCOL_REPAIR_MAX_RAW_LENGTH`.
+- Added model protocol error metadata and repair counts to agent run results and saved run records.
+- Added one controlled repair retry when DeepSeek returns malformed JSON or misses the `tool_call`/`final` protocol.
+- Added protocol repair display in CLI, Web, and TUI outputs.
+- Added `docs/MODEL_PROTOCOL.md` for the current JSON protocol and repair flow.
+
+### Changed
+
+- Runner now classifies protocol failures as `non_json`, `top_level_not_object`, `missing_type`, or `invalid_tool_call`.
+- Runner can extract the first JSON object from prose-wrapped model output before falling back to repair.
+- Updated handoff context, project planning, and generated architecture snapshots for V0.14.
+- Bumped project version to `0.14.0`.
 
 ## 0.13.0 - 2026-05-22
 

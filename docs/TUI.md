@@ -7,6 +7,9 @@ summary, so a run looks closer to a practical coding-agent loop.
 V0.13 adds the active context-selection summary to the result area, showing how
 many indexed files were selected for the first prompt map.
 
+V0.14 adds the active model protocol repair policy and repair count, so malformed
+model responses show up as a visible agent step instead of a mysterious stop.
+
 ```bash
 npm run tui
 npm run tui -- "查看当前仓库状态"
@@ -51,3 +54,12 @@ The TUI shows context selection after a run completes:
 - selected context line in the result area
 
 Tune it with `AGENT_CONTEXT_SELECTED_MAX_FILES`.
+
+## Model Protocol
+
+The TUI renders protocol repair through the same event stream:
+
+- `修复模型协议` appears in live events when a repair prompt is sent.
+- The result area shows the configured repair policy and repair count.
+
+Tune it with `AGENT_PROTOCOL_REPAIR_MAX_ATTEMPTS`.

@@ -96,6 +96,26 @@ export type ToolPolicySnapshot = {
   warnings: string[];
 };
 
+export type ModelProtocolErrorCode =
+  | "non_json"
+  | "top_level_not_object"
+  | "missing_type"
+  | "invalid_tool_call";
+
+export type ModelProtocolError = {
+  code: ModelProtocolErrorCode;
+  reason: string;
+  rawTextPreview: string;
+  occurredAt: string;
+  repairAttempted: boolean;
+};
+
+export type ProtocolRepairPolicy = {
+  maxAttempts: number;
+  maxRawTextLength: number;
+  source: "env";
+};
+
 export type WorkspaceSnapshot = {
   root: string;
   fileCount: number;
@@ -202,6 +222,9 @@ export type AgentRunResult = {
   contextBudget?: ContextBudget;
   contextSelection?: ContextSelection;
   toolPolicy?: ToolPolicySnapshot;
+  protocolRepairPolicy?: ProtocolRepairPolicy;
+  protocolRepairCount?: number;
+  protocolErrors?: ModelProtocolError[];
   toolCallCount: number;
   answer: AgentAnswer;
   rawText?: string;

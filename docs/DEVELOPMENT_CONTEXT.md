@@ -62,9 +62,9 @@ Observed ideas to learn from:
 
 ## Current State
 
-Version: V0.13
+Version: V0.14
 
-The current implementation is a Node.js 22 + Next.js 16 learning workbench plus a CLI and a dependency-free TUI spike. It has read-only tools, explicit context budgets, heuristic context selection, configurable tool policy, human-approved patch application, whitelist validation commands, local run history, Agent Event Bus, DeepSeek token streaming, terminal approval flow, and simple resume.
+The current implementation is a Node.js 22 + Next.js 16 learning workbench plus a CLI and a dependency-free TUI spike. It has read-only tools, explicit context budgets, heuristic context selection, configurable tool policy, model protocol repair, human-approved patch application, whitelist validation commands, local run history, Agent Event Bus, DeepSeek token streaming, terminal approval flow, and simple resume.
 
 Implemented:
 
@@ -82,6 +82,11 @@ Implemented:
 - CLI, Web, TUI, and saved run records expose selected files, scores, and reasons.
 - DeepSeek provider using OpenAI-compatible chat completions and SSE token streaming.
 - Provider-agnostic JSON tool-call protocol.
+- `src/lib/agent/model-protocol.ts` controls one visible repair retry for malformed model protocol output.
+- `AGENT_PROTOCOL_REPAIR_MAX_ATTEMPTS` and `AGENT_PROTOCOL_REPAIR_MAX_RAW_LENGTH` control protocol repair behavior.
+- Runner classifies model protocol failures as `non_json`, `top_level_not_object`, `missing_type`, or `invalid_tool_call`.
+- Runner can extract the first JSON object from prose-wrapped model output before using the repair path.
+- CLI, Web, TUI, and saved run records expose protocol repair policy, repair counts, and protocol errors.
 - Read-only `list_files`, `read_file`, `search_text`, and `git_status` tools.
 - Tool definitions include `category`, `risk`, and `approvalRequired` so callable boundaries are visible to prompt, code, and docs.
 - `src/lib/agent/tool-policy.ts` turns environment variables into a run-level tool policy snapshot.
@@ -135,6 +140,7 @@ Important files:
 - `src/lib/agent/runner.ts`
 - `src/lib/agent/context-budget.ts`
 - `src/lib/agent/context-selection.ts`
+- `src/lib/agent/model-protocol.ts`
 - `src/lib/agent/tool-policy.ts`
 - `src/lib/agent/tools.ts`
 - `src/lib/agent/git-tools.ts`
@@ -160,6 +166,7 @@ Important files:
 - `docs/TUI.md`
 - `docs/CONTEXT_BUDGET.md`
 - `docs/CONTEXT_SELECTION.md`
+- `docs/MODEL_PROTOCOL.md`
 - `docs/TOOL_POLICY.md`
 
 ## Architecture Direction
@@ -179,7 +186,7 @@ UI / CLI
   -> Generated docs + architecture snapshot
 ```
 
-The V0.13 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 validation, V0.5 run history, V0.6 terminal shell, V0.7 CLI streaming/approval, V0.8 cross-surface continuation, V0.9 shared event stream, V0.10 full-screen terminal renderer, V0.11 context budgets/tool boundaries, V0.12 local tool policy, and adds an explainable context-selection layer before prompt construction:
+The V0.14 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 validation, V0.5 run history, V0.6 terminal shell, V0.7 CLI streaming/approval, V0.8 cross-surface continuation, V0.9 shared event stream, V0.10 full-screen terminal renderer, V0.11 context budgets/tool boundaries, V0.12 local tool policy, V0.13 context selection, and adds a visible model protocol repair path:
 
 1. User submits a goal.
 2. Agent creates a turn state.
@@ -208,11 +215,13 @@ The V0.13 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 valid
 25. Runner applies a central context budget before workspace indexing and tool execution.
 26. Runner scores indexed files by current goal, path, module hints, and size.
 27. Prompt construction receives only the selected initial file map plus selection metadata.
-28. Tool definitions expose category, risk, and approval metadata; current model-callable tools remain low-risk read-only tools.
-29. Runner builds a tool policy snapshot from `AGENT_ALLOWED_READ_TOOLS` and `AGENT_PATCH_PROPOSAL`.
-30. Prompt construction exposes only policy-allowed tools.
-31. Runner enforces the same policy before executing tool calls.
-32. CLI, Web, and TUI show context selection and policy metadata so users can understand why a run had a smaller prompt and tool surface.
+28. Runner parses model output against the `tool_call`/`final` JSON protocol.
+29. If parsing fails, runner records a typed protocol error and can send one compact repair prompt.
+30. Tool definitions expose category, risk, and approval metadata; current model-callable tools remain low-risk read-only tools.
+31. Runner builds a tool policy snapshot from `AGENT_ALLOWED_READ_TOOLS` and `AGENT_PATCH_PROPOSAL`.
+32. Prompt construction exposes only policy-allowed tools.
+33. Runner enforces the same policy before executing tool calls.
+34. CLI, Web, and TUI show context selection, protocol repair, and policy metadata so users can understand why a run had a smaller prompt/tool surface or needed repair.
 
 Debugging uses the official Next.js 16 `next dev --inspect` path. Start `npm run dev:inspect:break`, attach VS Code with `Attach Next.js Server (9229)`, and run `npm run debug:check` to verify that the guarded `debugger` statement in `src/app/api/agent/route.ts` is reachable before testing normal source breakpoints.
 
@@ -447,6 +456,27 @@ Do not build yet:
 - arbitrary shell execution from model output
 - full transcript replay
 
+## V0.14 Completed
+
+Theme: model protocol repair and retry.
+
+Built:
+
+- `src/lib/agent/model-protocol.ts` for repair policy, raw response previews, and typed error snapshots.
+- `AGENT_PROTOCOL_REPAIR_MAX_ATTEMPTS` and `AGENT_PROTOCOL_REPAIR_MAX_RAW_LENGTH` knobs.
+- Protocol repair policy, repair count, and protocol errors on run results and saved records.
+- One controlled repair retry after malformed JSON or protocol misses.
+- First-JSON-object extraction for prose-wrapped model output.
+- CLI/Web/TUI display for repair policy, repair count, and protocol errors.
+- `docs/MODEL_PROTOCOL.md` as the model protocol handoff note.
+
+Do not build yet:
+
+- multi-step autonomous repair loops
+- arbitrary shell execution from model output
+- diff-based patch preview
+- full transcript replay
+
 ## Safety Rules
 
 - macOS only for now.
@@ -463,7 +493,7 @@ Use this prompt when starting the next version:
 ```txt
 You are continuing DeepSeek TUI Demo.
 
-Goal: implement V0.14, model protocol repair and retry for a macOS-first coding-agent learning project built with Next.js and TypeScript.
+Goal: implement V0.15, patch diff preview and clearer write-risk review for a macOS-first coding-agent learning project built with Next.js and TypeScript.
 
 Read first:
 - docs/DEVELOPMENT_CONTEXT.md
@@ -471,6 +501,7 @@ Read first:
 - src/lib/agent/runner.ts
 - src/lib/agent/context-budget.ts
 - src/lib/agent/context-selection.ts
+- src/lib/agent/model-protocol.ts
 - src/lib/agent/tool-policy.ts
 - src/lib/agent/prompts.ts
 - src/lib/agent/tools.ts
@@ -485,6 +516,7 @@ Read first:
 - src/cli/tui.ts
 - docs/CONTEXT_BUDGET.md
 - docs/CONTEXT_SELECTION.md
+- docs/MODEL_PROTOCOL.md
 - docs/TOOL_POLICY.md
 
 Constraints:
@@ -497,12 +529,13 @@ Constraints:
 - Keep the V0.11 context budget controls working.
 - Keep the V0.12 tool policy controls working.
 - Keep the V0.13 context selection controls working.
+- Keep the V0.14 protocol repair controls working.
 - Keep human approval before writes.
 - Never execute model-suggested arbitrary commands.
 - Reuse the existing runner, run store, resume, patch, and validation modules.
-- Add a model response repair path for malformed JSON or protocol misses.
-- Allow at most one controlled retry with a compact repair instruction.
-- Keep repair logs as high-level visible steps, not hidden reasoning.
+- Add a diff preview for patchProposal before applying writes.
+- Show added/removed line counts and changed file summaries in Web and CLI.
+- Keep patch application behind explicit human approval.
 - Keep validation commands whitelist-only.
 - Do not store API keys or full hidden reasoning.
 - Update README through npm run readme:generate.

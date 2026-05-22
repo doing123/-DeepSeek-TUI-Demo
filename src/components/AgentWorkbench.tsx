@@ -9,6 +9,7 @@ import type {
   ContextSelection,
   PatchApplyResult,
   PatchProposal,
+  ProtocolRepairPolicy,
   ToolPolicySnapshot,
   ValidationCommandName,
   ValidationRunResult
@@ -395,6 +396,11 @@ function AgentResultView({
                 policy {result.toolPolicy.allowedReadTools.length} tools
               </span>
             ) : null}
+            {typeof result.protocolRepairCount === "number" ? (
+              <span className={result.protocolRepairCount > 0 ? "tag tag--warn" : "tag tag--neutral"}>
+                repair {result.protocolRepairCount}
+              </span>
+            ) : null}
             <span className="tag tag--neutral">{result.toolCallCount} tools</span>
           </div>
           <h2>{result.answer.title}</h2>
@@ -465,6 +471,27 @@ function AgentResultView({
                 </li>
               ))}
             </ul>
+          </section>
+        ) : null}
+
+        {result.protocolRepairPolicy ? (
+          <section className="panel">
+            <h3>协议修复</h3>
+            <p className="summary">
+              {formatProtocolRepairSummary(result.protocolRepairPolicy, result.protocolRepairCount ?? 0)}
+            </p>
+            {result.protocolErrors?.length ? (
+              <ul className="list compact-list">
+                {result.protocolErrors.map((error) => (
+                  <li key={`${error.code}-${error.occurredAt}`}>
+                    <span className="step-title">{error.code}</span>
+                    <span className="step-meta">
+                      {error.reason} · repair {error.repairAttempted ? "attempted" : "skipped"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </section>
         ) : null}
 
@@ -821,6 +848,10 @@ function formatJson(value: unknown) {
 function formatContextSelectionSummary(selection: ContextSelection) {
   const terms = selection.goalTerms.slice(0, 8).join(", ") || "none";
   return `${selection.strategy} · selected ${selection.selectedCount}/${selection.candidateCount} · terms: ${terms}`;
+}
+
+function formatProtocolRepairSummary(policy: ProtocolRepairPolicy, repairCount: number) {
+  return `attempts ${repairCount}/${policy.maxAttempts} · raw limit ${policy.maxRawTextLength} · source ${policy.source}`;
 }
 
 function formatToolPolicySummary(policy: ToolPolicySnapshot) {
