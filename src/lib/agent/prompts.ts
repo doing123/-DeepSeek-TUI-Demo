@@ -1,12 +1,22 @@
-import type { AgentMessage, ToolDefinition, ToolResult, WorkspaceSnapshot } from "./types";
+import type {
+  AgentMessage,
+  ToolDefinition,
+  ToolPolicySnapshot,
+  ToolResult,
+  WorkspaceSnapshot
+} from "./types";
 
 export function buildCodingAgentMessages(
   goal: string,
   snapshot: WorkspaceSnapshot,
   tools: ToolDefinition[],
+  toolPolicy: ToolPolicySnapshot,
   maxToolCalls: number
 ): AgentMessage[] {
   const toolNames = tools.map((tool) => tool.name).join("|");
+  const patchInstruction = toolPolicy.patchProposal === "enabled"
+    ? "只有当用户明确要求实现代码或修改文件时，才返回 patchProposal。"
+    : "当前 tool policy 禁用了 patchProposal；final answer 只能给建议、计划和风险，不能返回 patchProposal。";
 
   return [
     {
@@ -18,11 +28,12 @@ export function buildCodingAgentMessages(
         "当前版本禁止写文件、执行 shell、修改 git、联网搜索或调用未列出的工具。",
         "工具定义包含 category、risk、approvalRequired。当前模型只允许请求 category=read 且 approvalRequired=false 的工具。",
         "写文件、补丁应用和验证命令只能通过用户确认后的本地入口执行，不能由模型直接调用。",
+        `当前 tool policy：read tools=[${toolPolicy.allowedReadTools.join(", ")}]，patchProposal=${toolPolicy.patchProposal}，validation=${toolPolicy.validationCommands}。`,
         `最多请求 ${maxToolCalls} 次工具。信息足够时必须给 final。`,
         "必须返回严格 JSON，不要使用 Markdown 代码块。",
         `如果需要工具，返回：{"type":"tool_call","tool":{"name":"${toolNames}","input":{...}}}`,
         "如果完成任务，返回：{\"type\":\"final\",\"answer\":{\"title\": string, \"summary\": string, \"plan\": string[], \"filesToInspect\": string[], \"proposedChanges\": string[], \"risks\": string[], \"nextActions\": string[], \"patchProposal\"?: {\"summary\": string, \"files\": [{\"path\": string, \"action\": \"create\"|\"replace\", \"content\": string, \"explanation\"?: string}]}}}",
-        "只有当用户明确要求实现代码或修改文件时，才返回 patchProposal。",
+        patchInstruction,
         "patchProposal 必须使用完整文件内容；path 必须是仓库相对路径；禁止修改 .env、.git、node_modules、.next 或二进制文件。",
         "patchProposal 只是提案，服务端会等用户确认后再应用。",
         "不要同时返回 tool_call 和 final。不要编造未读取过的文件内容。"
@@ -42,6 +53,7 @@ export function buildCodingAgentMessages(
               size: file.size
             }))
           },
+          toolPolicy,
           availableTools: tools
         },
         null,

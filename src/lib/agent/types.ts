@@ -73,6 +73,14 @@ export type ContextBudget = {
   maxToolOutputLength: number;
 };
 
+export type ToolPolicySnapshot = {
+  allowedReadTools: ReadOnlyToolName[];
+  patchProposal: "enabled" | "disabled";
+  validationCommands: "manual";
+  source: "env";
+  warnings: string[];
+};
+
 export type WorkspaceSnapshot = {
   root: string;
   fileCount: number;
@@ -176,6 +184,7 @@ export type AgentRunResult = {
   steps: AgentStep[];
   workspace: Pick<WorkspaceSnapshot, "root" | "fileCount">;
   contextBudget?: ContextBudget;
+  toolPolicy?: ToolPolicySnapshot;
   toolCallCount: number;
   answer: AgentAnswer;
   rawText?: string;

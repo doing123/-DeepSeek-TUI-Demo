@@ -8,6 +8,7 @@ import type {
   AgentRunSummary,
   PatchApplyResult,
   PatchProposal,
+  ToolPolicySnapshot,
   ValidationCommandName,
   ValidationRunResult
 } from "@/lib/agent/types";
@@ -383,6 +384,11 @@ function AgentResultView({
                 budget {result.contextBudget.maxWorkspaceFiles} files
               </span>
             ) : null}
+            {result.toolPolicy ? (
+              <span className="tag tag--neutral">
+                policy {result.toolPolicy.allowedReadTools.length} tools
+              </span>
+            ) : null}
             <span className="tag tag--neutral">{result.toolCallCount} tools</span>
           </div>
           <h2>{result.answer.title}</h2>
@@ -438,6 +444,30 @@ function AgentResultView({
             ))}
           </ul>
         </section>
+
+        {result.toolPolicy ? (
+          <section className="panel">
+            <h3>工具策略</h3>
+            <p className="summary">{formatToolPolicySummary(result.toolPolicy)}</p>
+            <div className="tag-row">
+              {result.toolPolicy.allowedReadTools.map((tool) => (
+                <span className="tag tag--neutral" key={tool}>
+                  {tool}
+                </span>
+              ))}
+              <span className={result.toolPolicy.patchProposal === "enabled" ? "tag tag--ok" : "tag tag--warn"}>
+                patch {result.toolPolicy.patchProposal}
+              </span>
+            </div>
+            {result.toolPolicy.warnings.length > 0 ? (
+              <ul className="list compact-list">
+                {result.toolPolicy.warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            ) : null}
+          </section>
+        ) : null}
 
         {record?.patchProposalMeta ? (
           <section className="panel">
@@ -763,6 +793,15 @@ async function readErrorMessage(response: Response) {
 
 function formatJson(value: unknown) {
   return JSON.stringify(value, null, 2);
+}
+
+function formatToolPolicySummary(policy: ToolPolicySnapshot) {
+  return [
+    `read tools: ${policy.allowedReadTools.join(", ")}`,
+    `patchProposal: ${policy.patchProposal}`,
+    `validation: ${policy.validationCommands}`,
+    `source: ${policy.source}`
+  ].join(" · ");
 }
 
 function previewContent(content: string) {

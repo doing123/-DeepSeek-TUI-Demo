@@ -9,6 +9,12 @@ import {
 import { normalizePatchProposal } from "./patches";
 import { buildCodingAgentMessages, buildToolResultMessage } from "./prompts";
 import {
+  describeToolPolicy,
+  filterToolsByPolicy,
+  getToolPolicy,
+  isToolAllowed
+} from "./tool-policy";
+import {
   createToolCall,
   executeReadOnlyTool,
   isReadOnlyToolName,
@@ -21,6 +27,7 @@ import type {
   AgentRunEvent,
   AgentRunResult,
   AgentStep,
+  ToolPolicySnapshot,
   ToolCall,
   WorkspaceSnapshot
 } from "./types";
@@ -49,6 +56,8 @@ export async function runCodingAgent({
   const steps: AgentStep[] = [];
   const config = getDeepSeekConfig();
   const contextBudget = getContextBudget();
+  const toolPolicy = getToolPolicy();
+  const availableTools = filterToolsByPolicy(READ_ONLY_TOOL_DEFINITIONS, toolPolicy);
   const modelGoal = promptGoal ?? goal;
 
   onEvent?.({
@@ -78,6 +87,17 @@ export async function runCodingAgent({
     steps,
     "应用上下文预算",
     describeContextBudget(contextBudget),
+    {
+      kind: "system"
+    },
+    onEvent
+  );
+  completeLatestStep(steps, undefined, {}, onEvent);
+
+  pushStep(
+    steps,
+    "应用工具策略",
+    describeToolPolicy(toolPolicy),
     {
       kind: "system"
     },
@@ -131,8 +151,9 @@ export async function runCodingAgent({
         fileCount: snapshot.fileCount
       },
       contextBudget,
+      toolPolicy,
       toolCallCount: 0,
-      answer: buildOfflineAnswer(snapshot.fileCount)
+      answer: buildOfflineAnswer(snapshot.fileCount, toolPolicy)
     };
 
     onEvent?.({ type: "run_completed", result });
@@ -142,7 +163,8 @@ export async function runCodingAgent({
   const messages = buildCodingAgentMessages(
     modelGoal,
     snapshot,
-    READ_ONLY_TOOL_DEFINITIONS,
+    availableTools,
+    toolPolicy,
     MAX_TOOL_CALLS
   );
   let toolCallCount = 0;
@@ -180,8 +202,9 @@ export async function runCodingAgent({
         startedAt,
         steps,
         snapshot,
+        toolPolicy,
         toolCallCount,
-        answer: parsed.answer,
+        answer: applyToolPolicyToAnswer(parsed.answer, toolPolicy),
         rawText: parsed.rawText
       }, onEvent);
     }
@@ -194,6 +217,7 @@ export async function runCodingAgent({
         startedAt,
         steps,
         snapshot,
+        toolPolicy,
         toolCallCount,
         answer: buildInvalidResponseAnswer(parsed.reason, completion.content),
         rawText: completion.content
@@ -208,9 +232,28 @@ export async function runCodingAgent({
         startedAt,
         steps,
         snapshot,
+        toolPolicy,
         toolCallCount,
         answer: buildToolLimitAnswer(MAX_TOOL_CALLS),
         rawText
+      }, onEvent);
+    }
+
+    if (!isToolAllowed(parsed.call.name, toolPolicy)) {
+      return completeRunResult({
+        goal,
+        resumeFromRunId,
+        model,
+        startedAt,
+        steps,
+        snapshot,
+        toolPolicy,
+        toolCallCount,
+        answer: buildInvalidResponseAnswer(
+          `工具 ${parsed.call.name} 不在当前 tool policy 允许列表中。`,
+          completion.content
+        ),
+        rawText: completion.content
       }, onEvent);
     }
 
@@ -250,6 +293,7 @@ export async function runCodingAgent({
     startedAt,
     steps,
     snapshot,
+    toolPolicy,
     toolCallCount,
     answer: buildToolLimitAnswer(MAX_TOOL_CALLS),
     rawText
@@ -306,6 +350,7 @@ function buildRunResult({
   startedAt,
   steps,
   snapshot,
+  toolPolicy,
   toolCallCount,
   answer,
   rawText
@@ -316,6 +361,7 @@ function buildRunResult({
   startedAt: string;
   steps: AgentStep[];
   snapshot: WorkspaceSnapshot;
+  toolPolicy: ToolPolicySnapshot;
   toolCallCount: number;
   answer: AgentAnswer;
   rawText?: string;
@@ -334,6 +380,7 @@ function buildRunResult({
       fileCount: snapshot.fileCount
     },
     contextBudget: snapshot.contextBudget,
+    toolPolicy,
     toolCallCount,
     answer,
     rawText
@@ -379,11 +426,11 @@ function completeLatestStep(
   onEvent?.({ type: "step_completed", step: latest });
 }
 
-function buildOfflineAnswer(fileCount: number): AgentAnswer {
+function buildOfflineAnswer(fileCount: number, toolPolicy: ToolPolicySnapshot): AgentAnswer {
   return {
-    title: "上下文预算和工具边界已就绪",
+    title: "上下文预算和工具策略已就绪",
     summary:
-      "当前运行在离线模式。V0.11 已经具备只读工具循环、结构化补丁提案、人工确认后的安全应用入口、运行历史、终端 CLI/TUI、续接上下文、Agent Event Bus、DeepSeek token streaming、上下文预算和显式工具边界；配置 DEEPSEEK_API_KEY 后模型可以通过 CLI、TUI 或 Web 流式输出。",
+      "当前运行在离线模式。V0.12 已经具备只读工具循环、结构化补丁提案、人工确认后的安全应用入口、运行历史、终端 CLI/TUI、续接上下文、Agent Event Bus、DeepSeek token streaming、上下文预算和可配置工具策略；配置 DEEPSEEK_API_KEY 后模型可以通过 CLI、TUI 或 Web 流式输出。",
     plan: [
       "把 Web UI 作为任务入口，收集用户的编码目标。",
       `服务端先索引当前工作区的 ${fileCount} 个文本文件。`,
@@ -394,7 +441,7 @@ function buildOfflineAnswer(fileCount: number): AgentAnswer {
       "终端可通过 --stream 查看高层步骤事件，通过 --apply 审批补丁，通过 --validate 运行白名单验证。",
       "CLI 和 Web 都可以选择历史 run，把上一轮摘要、计划、风险、补丁元信息和验证结果作为本轮上下文。",
       "Web 流式 API 会发送 run、step、model token、tool call 和 run completed 事件。",
-      "V0.11 把上下文预算和工具边界显式化，模型只能请求低风险只读工具。"
+      "V0.12 把工具策略显式化，模型只能请求当前策略允许的低风险只读工具。"
     ],
     filesToInspect: [
       "src/app/api/agent/route.ts",
@@ -407,16 +454,18 @@ function buildOfflineAnswer(fileCount: number): AgentAnswer {
       "src/lib/agent/validation.ts",
       "src/lib/agent/resume.ts",
       "src/lib/agent/context-budget.ts",
+      "src/lib/agent/tool-policy.ts",
       "docs/CONTEXT_BUDGET.md",
       "src/app/api/agent/stream/route.ts"
     ],
     proposedChanges: [
-      "V0.12 可以继续细化工具注册表，把 read/write/validation 的审批策略拆成可配置 policy，并给 TUI 增加独立工具面板。"
+      "V0.13 可以继续做文件优先级策略，让索引、检索和 read_file 更接近真实 coding agent 的上下文选择。"
     ],
     risks: [
       "当前版本只读仓库，不会自动修改文件。",
       "上下文截断很简单，大仓库需要索引、检索和 token 预算。",
       `当前工具边界：${describeToolBoundaries(READ_ONLY_TOOL_DEFINITIONS)}`,
+      `当前工具策略：${describeToolPolicy(toolPolicy)}`,
       "DeepSeek key 只应放在服务端环境变量，不能暴露到浏览器。"
     ],
     nextActions: [
@@ -426,6 +475,29 @@ function buildOfflineAnswer(fileCount: number): AgentAnswer {
       "调整 AGENT_CONTEXT_* 环境变量测试预算收敛效果。",
       "运行 npm run agent -- --continue <run-id> \"继续上一轮任务\" 测试恢复上下文。",
       "运行 npm run agent -- --validate typecheck \"检查当前实现\" 测试终端验证。"
+    ]
+  };
+}
+
+function applyToolPolicyToAnswer(
+  answer: AgentAnswer,
+  toolPolicy: ToolPolicySnapshot
+): AgentAnswer {
+  if (toolPolicy.patchProposal === "enabled" || !answer.patchProposal) {
+    return answer;
+  }
+
+  const { patchProposal: _patchProposal, ...rest } = answer;
+
+  return {
+    ...rest,
+    proposedChanges: [
+      ...answer.proposedChanges,
+      "模型返回了 patchProposal，但当前 AGENT_PATCH_PROPOSAL=disabled，服务端已按工具策略移除补丁提案。"
+    ],
+    risks: [
+      ...answer.risks,
+      "补丁提案被本地工具策略拦截，本轮不会出现可应用补丁。"
     ]
   };
 }

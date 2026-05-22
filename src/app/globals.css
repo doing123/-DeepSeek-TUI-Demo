@@ -402,6 +402,15 @@ button {
   border-radius: 8px;
 }
 
+.compact-list {
+  margin-top: 12px;
+}
+
+.compact-list li {
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
 .step-title {
   font-weight: 800;
 }

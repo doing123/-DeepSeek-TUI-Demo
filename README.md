@@ -22,14 +22,15 @@ Open http://localhost:3000 and run a goal from the workbench.
 
 ## Architecture
 
-![Architecture v0.11.0](docs/architecture/architecture-v0.11.0.svg)
+![Architecture v0.12.0](docs/architecture/architecture-v0.12.0.svg)
 
 - **Next.js App**: 负责输入任务、展示 agent trace、展示实时事件、结构化建议和续接历史运行。
 - **CLI/TUI Shell**: 通过 npm run agent 和 npm run tui 复用 agent runner，提供终端入口、事件流、token 输出、运行历史回看和续接。
 - **API Route**: 运行在 Node.js 服务端，提供 JSON 和 SSE 两种 agent 请求入口。
-- **Agent Runner**: 组织任务理解、上下文预算、仓库扫描、LLM 调用、事件总线、结果解析。
+- **Agent Runner**: 组织任务理解、上下文预算、工具策略、仓库扫描、LLM 调用、事件总线、结果解析。
+- **Tool Policy**: 从环境变量生成本地工具策略，限制模型可请求的只读工具，并控制是否允许 patchProposal。
 - **DeepSeek Provider**: 封装 OpenAI-compatible chat completions 和 SSE token streaming。
-- **Workspace Tools**: 当前支持带预算限制的安全只读扫描、文件读取、文本搜索和 Git 状态读取，后续扩展 write_patch、run_command。
+- **Workspace Tools**: 当前支持带预算和策略限制的安全只读扫描、文件读取、文本搜索和 Git 状态读取，后续扩展 write_patch、run_command。
 - **README Generator**: 从项目规划数据和 package scripts 生成 README，并由 pre-commit hook 自动执行。
 
 Architecture snapshots are stored in `docs/architecture/` for version-to-version comparison.
@@ -56,11 +57,14 @@ Architecture snapshots are stored in `docs/architecture/` for version-to-version
 - Agent Event Bus：runner 输出 run、step、model stream、model token、tool call 和 run completed 事件。
 - 上下文预算：AGENT_CONTEXT_* 环境变量控制文件索引、文件读取、搜索范围和工具输出长度。
 - 工具边界：工具定义包含 category、risk、approvalRequired，当前模型只能请求低风险只读工具。
+- 工具策略：AGENT_ALLOWED_READ_TOOLS 可限制模型本轮能看到和请求的只读工具。
+- Patch 策略：AGENT_PATCH_PROPOSAL=disabled 时，runner 会移除模型返回的 patchProposal。
 - 离线模式：没有 API key 时仍能返回本地规划结果。
 - 工作区索引：忽略 .git、node_modules、.next 和真实 .env 文件，只暴露文本文件路径。
 - 只读工具循环：模型可通过严格 JSON 协议请求 list_files、read_file、search_text、git_status。
 - Git 只读上下文：agent 可读取当前分支、短状态、diff stat 和最近提交。
 - 工具 trace：UI 展示每次工具调用的输入和输出摘要。
+- TUI 工具面板：终端界面单独展示工具调用摘要和当前策略信息。
 - 实时运行视图：Web 工作台在运行中展示事件列表和模型流片段。
 - 补丁预览：模型 final answer 可附带结构化 patchProposal，由 UI 展示待写入文件。
 - 人工审批：用户点击应用补丁后，服务端重新校验路径和 action，再写入 create/replace 文件。
@@ -113,6 +117,7 @@ Sources:
 - V0.9 把 runner 的回调升级为 Agent Event Bus，并用 SSE 让 Web 和后续 TUI 共享同一套事件协议。
 - V0.10 先用无依赖 ANSI alternate screen 做 TUI spike，验证终端布局和键盘事件，再决定是否引入专门 TUI 框架。
 - V0.11 把 context budget 从隐含常量升级成显式运行配置，并把工具可调用边界写入类型和 prompt。
+- V0.12 在工具边界上增加本地 policy，让 prompt 暴露、runner 执行和 UI 展示都共享同一份策略快照。
 
 ## Development Context
 
@@ -122,6 +127,7 @@ Sources:
 - `docs/DEBUGGING.md`: 服务端调试步骤，记录如何让浏览器请求触发 Next API 断点。
 - `docs/CLI.md`: 终端入口使用说明，记录 CLI 命令、续接能力和限制。
 - `docs/CONTEXT_BUDGET.md`: 上下文预算和工具边界说明。
+- `docs/TOOL_POLICY.md`: 工具策略、allowlist 和 patchProposal 策略说明。
 
 ## Roadmap
 
@@ -204,10 +210,17 @@ Sources:
 
 ### V0.12 · 工具策略与 TUI 工具面板
 
-- 可配置 tool policy
-- TUI 工具调用详情
-- 验证/补丁审批面板增强
-- 文件优先级策略
+- AGENT_ALLOWED_READ_TOOLS read-tool allowlist
+- AGENT_PATCH_PROPOSAL planning-only 开关
+- Runner 执行前策略校验
+- TUI 工具调用详情和策略摘要
+
+### V0.13 · 文件优先级与上下文选择
+
+- 文件优先级评分
+- 按目标选择候选文件
+- 上下文预算可视化
+- TUI/Web 展示上下文选择原因
 
 ## Scripts
 

@@ -4,6 +4,7 @@ import { createInterface } from "readline/promises";
 import { pathToFileURL } from "url";
 import { describeContextBudget } from "../lib/agent/context-budget";
 import { buildResumePromptGoal, formatResumeTitle } from "../lib/agent/resume";
+import { describeToolPolicy } from "../lib/agent/tool-policy";
 import type {
   AgentRunEvent,
   AgentRunRecord,
@@ -456,6 +457,9 @@ function printAgentResult(result: AgentRunResult | StoredAgentRunResult, options
   console.log(`Workspace files indexed: ${result.workspace.fileCount}`);
   if (result.contextBudget) {
     console.log(`Context budget: ${describeContextBudget(result.contextBudget)}`);
+  }
+  if (result.toolPolicy) {
+    console.log(`Tool policy: ${describeToolPolicy(result.toolPolicy)}`);
   }
   console.log(`Tool calls: ${result.toolCallCount}`);
   console.log("");

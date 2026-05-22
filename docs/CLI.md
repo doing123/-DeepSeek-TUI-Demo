@@ -8,6 +8,9 @@ inspect, continue, approve, validate.
 V0.10 adds `npm run tui` for the first full-screen terminal interface. See
 `docs/TUI.md` for the interactive keymap.
 
+V0.12 adds local tool policy output. CLI runs now print the active read-tool
+allowlist and patchProposal policy when the result includes policy metadata.
+
 ## Usage
 
 ```bash
@@ -78,3 +81,5 @@ npm run agent -- --json "查看当前仓库有哪些风险"
   the browser patch API.
 - Validation commands are still whitelist-only: `typecheck`, `build`, or `all`.
 - Git context is exposed through the fixed read-only `git_status` tool.
+- Tool policy is controlled by `AGENT_ALLOWED_READ_TOOLS` and
+  `AGENT_PATCH_PROPOSAL`. The prompt and runner use the same policy snapshot.

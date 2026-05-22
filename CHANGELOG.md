@@ -6,7 +6,26 @@ All notable project changes are tracked here.
 
 ### Notes
 
-- Next planned focus: configurable tool policy and richer TUI tool panels.
+- Next planned focus: file priority strategy and better context selection.
+
+## 0.12.0 - 2026-05-22
+
+### Added
+
+- Added `src/lib/agent/tool-policy.ts` for environment-driven read-tool allowlists and patch proposal policy.
+- Added `AGENT_ALLOWED_READ_TOOLS` and `AGENT_PATCH_PROPOSAL` environment knobs.
+- Added active tool policy metadata to each agent run result and persisted run record.
+- Added TUI tool-call detail rendering and policy summary output.
+- Added Web and CLI display for active tool policy.
+- Added `docs/TOOL_POLICY.md` for the current policy model.
+
+### Changed
+
+- Prompt construction now advertises only tools allowed by the active policy.
+- Runner now enforces tool policy before executing model-requested tools.
+- Runner removes model-returned `patchProposal` when `AGENT_PATCH_PROPOSAL=disabled`.
+- Updated project planning, handoff context, and generated architecture snapshots for V0.12.
+- Bumped project version to `0.12.0`.
 
 ## 0.11.0 - 2026-05-21
 

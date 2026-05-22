@@ -6,6 +6,7 @@ import { pathToFileURL } from "url";
 import { applyPatchProposal } from "../lib/agent/patches";
 import { buildResumePromptGoal } from "../lib/agent/resume";
 import { runCodingAgent } from "../lib/agent/runner";
+import { describeToolPolicy } from "../lib/agent/tool-policy";
 import {
   listAgentRunSummaries,
   readAgentRunRecord,
@@ -33,6 +34,7 @@ type TuiState = {
   isRunning: boolean;
   status: string;
   events: string[];
+  toolEvents: string[];
   streamText: string;
   result?: AgentRunResult;
 };
@@ -68,6 +70,7 @@ async function main() {
     isRunning: false,
     status: "Ready",
     events: [],
+    toolEvents: [],
     streamText: ""
   };
 
@@ -206,6 +209,7 @@ async function runTuiAgent(state: TuiState) {
   state.isRunning = true;
   state.status = "Running";
   state.events = [];
+  state.toolEvents = [];
   state.streamText = "";
   state.result = undefined;
   render(state);
@@ -245,6 +249,13 @@ function applyEvent(state: TuiState, event: AgentRunEvent) {
     return;
   }
 
+  if (event.type === "tool_call") {
+    state.toolEvents = [
+      ...state.toolEvents,
+      `${event.call.name} ${formatInlineJson(event.call.input)}`
+    ].slice(-8);
+  }
+
   const line = formatEvent(event);
   if (line) {
     state.events = [...state.events, line].slice(-MAX_EVENTS);
@@ -269,10 +280,14 @@ function render(state: TuiState) {
   lines.push(row("Goal", state.goal, leftWidth, "Live Events", state.status, rightWidth));
   lines.push(row("Keys", "r run · n edit · ↑↓ select · c continue · a apply patch · q quit", leftWidth, "", "", rightWidth));
   lines.push(row("Resume", state.resumeRunId ?? "none", leftWidth, "", "", rightWidth));
+  lines.push(row("Tool Calls", formatToolSummary(state), leftWidth, "Policy", formatPolicySummary(state.result), rightWidth));
   lines.push("");
 
   const recentLines = formatRecentRuns(state.recentRuns, state.selectedIndex, leftWidth);
   const eventLines = state.events.length > 0 ? state.events : ["No events yet."];
+  const toolLines = state.toolEvents.length > 0
+    ? ["Tool Calls", ...state.toolEvents]
+    : ["Tool Calls", "No tool calls yet."];
   const maxPaneLines = Math.max(recentLines.length, eventLines.length, 10);
 
   for (let index = 0; index < maxPaneLines; index += 1) {
@@ -285,6 +300,9 @@ function render(state: TuiState) {
   }
 
   lines.push("");
+  lines.push(color("Tool Detail", "cyan"));
+  lines.push(...toolLines.slice(0, 6).map((line) => truncate(line, width)));
+  lines.push("");
   lines.push(color("Model Stream", "cyan"));
   lines.push(...wrap(state.streamText || "Waiting for model output...", width).slice(0, 8));
 
@@ -295,6 +313,10 @@ function render(state: TuiState) {
 
     if (state.result.answer.patchProposal) {
       lines.push(color(`Patch: ${state.result.answer.patchProposal.summary}`, "cyan"));
+    }
+
+    if (state.result.toolPolicy) {
+      lines.push(color(`Policy: ${describeToolPolicy(state.result.toolPolicy)}`, "dim"));
     }
   }
 
@@ -440,6 +462,27 @@ function formatEvent(event: AgentRunEvent) {
   }
 
   return "";
+}
+
+function formatToolSummary(state: TuiState) {
+  if (state.result) {
+    return `${state.result.toolCallCount} executed`;
+  }
+
+  return state.toolEvents.length > 0 ? `${state.toolEvents.length} observed` : "none";
+}
+
+function formatPolicySummary(result: AgentRunResult | undefined) {
+  if (!result?.toolPolicy) {
+    return "available after run";
+  }
+
+  return `read=${result.toolPolicy.allowedReadTools.length} patch=${result.toolPolicy.patchProposal}`;
+}
+
+function formatInlineJson(value: unknown) {
+  const text = JSON.stringify(value);
+  return text.length > 80 ? `${text.slice(0, 77)}...` : text;
 }
 
 function row(
