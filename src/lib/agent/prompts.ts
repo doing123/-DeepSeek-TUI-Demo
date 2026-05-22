@@ -16,6 +16,8 @@ export function buildCodingAgentMessages(
         "你的任务是根据用户目标，使用只读工具理解仓库，然后给出可执行的编码建议。",
         "不要输出逐字隐藏推理。只保留高层实现步骤、取舍、风险和下一步。",
         "当前版本禁止写文件、执行 shell、修改 git、联网搜索或调用未列出的工具。",
+        "工具定义包含 category、risk、approvalRequired。当前模型只允许请求 category=read 且 approvalRequired=false 的工具。",
+        "写文件、补丁应用和验证命令只能通过用户确认后的本地入口执行，不能由模型直接调用。",
         `最多请求 ${maxToolCalls} 次工具。信息足够时必须给 final。`,
         "必须返回严格 JSON，不要使用 Markdown 代码块。",
         `如果需要工具，返回：{"type":"tool_call","tool":{"name":"${toolNames}","input":{...}}}`,
@@ -34,6 +36,7 @@ export function buildCodingAgentMessages(
           workspace: {
             root: snapshot.root,
             fileCount: snapshot.fileCount,
+            contextBudget: snapshot.contextBudget,
             files: snapshot.files.map((file) => ({
               path: file.path,
               size: file.size

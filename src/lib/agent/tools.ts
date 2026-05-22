@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import type {
+  ContextBudget,
   ReadOnlyToolName,
   ToolCall,
   ToolDefinition,
@@ -15,6 +16,9 @@ import { getGitStatusSummary } from "./git-tools";
 export const READ_ONLY_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "list_files",
+    category: "read",
+    risk: "low",
+    approvalRequired: false,
     description: "List text-like files in the current workspace. Use this before reading files.",
     inputSchema: {
       type: "object",
@@ -28,6 +32,9 @@ export const READ_ONLY_TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: "read_file",
+    category: "read",
+    risk: "low",
+    approvalRequired: false,
     description: "Read a single workspace-relative text file with truncation.",
     inputSchema: {
       type: "object",
@@ -46,6 +53,9 @@ export const READ_ONLY_TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: "search_text",
+    category: "read",
+    risk: "low",
+    approvalRequired: false,
     description: "Search text-like workspace files for a case-insensitive query.",
     inputSchema: {
       type: "object",
@@ -64,6 +74,9 @@ export const READ_ONLY_TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: "git_status",
+    category: "read",
+    risk: "low",
+    approvalRequired: false,
     description:
       "Read the current Git branch, short status, diff stat, and recent commits. This is read-only.",
     inputSchema: {
@@ -92,11 +105,16 @@ export function isReadOnlyToolName(value: unknown): value is ReadOnlyToolName {
 
 export async function executeReadOnlyTool(
   call: ToolCall,
-  context: { workspaceRoot: string }
+  context: { workspaceRoot: string; contextBudget: ContextBudget }
 ): Promise<ToolResult> {
   try {
     if (call.name === "list_files") {
-      const maxFiles = readNumber(call.input.maxFiles, 80, 1, 160);
+      const maxFiles = readNumber(
+        call.input.maxFiles,
+        Math.min(80, context.contextBudget.maxWorkspaceFiles),
+        1,
+        context.contextBudget.maxWorkspaceFiles
+      );
       const files = await listWorkspaceFiles(context.workspaceRoot, { maxFiles });
 
       return {
@@ -112,7 +130,12 @@ export async function executeReadOnlyTool(
 
     if (call.name === "read_file") {
       const filePath = readRequiredString(call.input.path, "path");
-      const maxLength = readNumber(call.input.maxLength, 12_000, 500, 20_000);
+      const maxLength = readNumber(
+        call.input.maxLength,
+        context.contextBudget.maxReadLength,
+        500,
+        context.contextBudget.maxReadLength
+      );
       const file = await readWorkspaceFile(context.workspaceRoot, filePath, { maxLength });
 
       return {
@@ -137,8 +160,16 @@ export async function executeReadOnlyTool(
     }
 
     const query = readRequiredString(call.input.query, "query");
-    const maxMatches = readNumber(call.input.maxMatches, 24, 1, 60);
-    const matches = await searchWorkspaceText(context.workspaceRoot, query, { maxMatches });
+    const maxMatches = readNumber(
+      call.input.maxMatches,
+      context.contextBudget.maxSearchMatches,
+      1,
+      context.contextBudget.maxSearchMatches
+    );
+    const matches = await searchWorkspaceText(context.workspaceRoot, query, {
+      maxFiles: context.contextBudget.maxSearchFiles,
+      maxMatches
+    });
 
     return {
       callId: call.id,
@@ -161,14 +192,20 @@ export async function executeReadOnlyTool(
   }
 }
 
-export function summarizeToolOutput(result: ToolResult) {
+export function summarizeToolOutput(result: ToolResult, maxLength = 1400) {
   const compact = JSON.stringify(result.output ?? result.error ?? null, null, 2);
 
-  if (compact.length <= 1400) {
+  if (compact.length <= maxLength) {
     return compact;
   }
 
-  return `${compact.slice(0, 1400)}\n...`;
+  return `${compact.slice(0, maxLength)}\n...`;
+}
+
+export function describeToolBoundaries(tools: ToolDefinition[]) {
+  return tools
+    .map((tool) => `${tool.name}: category=${tool.category}, risk=${tool.risk}, approval=${tool.approvalRequired ? "required" : "none"}`)
+    .join("\n");
 }
 
 function readRequiredString(value: unknown, fieldName: string) {

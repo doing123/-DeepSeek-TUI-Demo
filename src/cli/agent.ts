@@ -2,6 +2,7 @@ import { readFile } from "fs/promises";
 import path from "path";
 import { createInterface } from "readline/promises";
 import { pathToFileURL } from "url";
+import { describeContextBudget } from "../lib/agent/context-budget";
 import { buildResumePromptGoal, formatResumeTitle } from "../lib/agent/resume";
 import type {
   AgentRunEvent,
@@ -453,6 +454,9 @@ function printAgentResult(result: AgentRunResult | StoredAgentRunResult, options
   console.log(`Mode: ${result.mode}`);
   console.log(`Model: ${result.model}`);
   console.log(`Workspace files indexed: ${result.workspace.fileCount}`);
+  if (result.contextBudget) {
+    console.log(`Context budget: ${describeContextBudget(result.contextBudget)}`);
+  }
   console.log(`Tool calls: ${result.toolCallCount}`);
   console.log("");
 

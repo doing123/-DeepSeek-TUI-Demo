@@ -103,6 +103,7 @@ function toStoredRunResult(result: AgentRunResult): StoredAgentRunResult {
     completedAt: result.completedAt,
     steps: result.steps,
     workspace: result.workspace,
+    contextBudget: result.contextBudget,
     toolCallCount: result.toolCallCount,
     answer
   };

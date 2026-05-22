@@ -378,6 +378,11 @@ function AgentResultView({
               <span className="tag tag--neutral">continued</span>
             ) : null}
             <span className="tag tag--neutral">{result.workspace.fileCount} files</span>
+            {result.contextBudget ? (
+              <span className="tag tag--neutral">
+                budget {result.contextBudget.maxWorkspaceFiles} files
+              </span>
+            ) : null}
             <span className="tag tag--neutral">{result.toolCallCount} tools</span>
           </div>
           <h2>{result.answer.title}</h2>

@@ -65,9 +65,18 @@ export type WorkspaceFile = {
   excerpt?: string;
 };
 
+export type ContextBudget = {
+  maxWorkspaceFiles: number;
+  maxReadLength: number;
+  maxSearchFiles: number;
+  maxSearchMatches: number;
+  maxToolOutputLength: number;
+};
+
 export type WorkspaceSnapshot = {
   root: string;
   fileCount: number;
+  contextBudget?: ContextBudget;
   files: WorkspaceFile[];
 };
 
@@ -123,6 +132,9 @@ export type PatchProposalMeta = {
 
 export type ToolDefinition = {
   name: ReadOnlyToolName;
+  category: "read";
+  risk: "low";
+  approvalRequired: false;
   description: string;
   inputSchema: Record<string, unknown>;
 };
@@ -163,6 +175,7 @@ export type AgentRunResult = {
   completedAt: string;
   steps: AgentStep[];
   workspace: Pick<WorkspaceSnapshot, "root" | "fileCount">;
+  contextBudget?: ContextBudget;
   toolCallCount: number;
   answer: AgentAnswer;
   rawText?: string;

@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { describeContextBudget, getContextBudget } from "./context-budget";
 import {
   completeWithDeepSeek,
   getDeepSeekConfig,
@@ -12,6 +13,7 @@ import {
   executeReadOnlyTool,
   isReadOnlyToolName,
   READ_ONLY_TOOL_DEFINITIONS,
+  describeToolBoundaries,
   summarizeToolOutput
 } from "./tools";
 import type {
@@ -46,6 +48,7 @@ export async function runCodingAgent({
   const startedAt = new Date().toISOString();
   const steps: AgentStep[] = [];
   const config = getDeepSeekConfig();
+  const contextBudget = getContextBudget();
   const modelGoal = promptGoal ?? goal;
 
   onEvent?.({
@@ -73,6 +76,17 @@ export async function runCodingAgent({
 
   pushStep(
     steps,
+    "应用上下文预算",
+    describeContextBudget(contextBudget),
+    {
+      kind: "system"
+    },
+    onEvent
+  );
+  completeLatestStep(steps, undefined, {}, onEvent);
+
+  pushStep(
+    steps,
     "建立文件索引",
     "列出仓库内可读的文本文件，作为工具循环的初始地图。",
     {
@@ -80,10 +94,13 @@ export async function runCodingAgent({
     },
     onEvent
   );
-  const files = await listWorkspaceFiles(workspaceRoot, { maxFiles: 160 });
+  const files = await listWorkspaceFiles(workspaceRoot, {
+    maxFiles: contextBudget.maxWorkspaceFiles
+  });
   const snapshot: WorkspaceSnapshot = {
     root: workspaceRoot,
     fileCount: files.length,
+    contextBudget,
     files
   };
   completeLatestStep(steps, `已索引 ${snapshot.fileCount} 个文本文件。`, {}, onEvent);
@@ -113,6 +130,7 @@ export async function runCodingAgent({
         root: snapshot.root,
         fileCount: snapshot.fileCount
       },
+      contextBudget,
       toolCallCount: 0,
       answer: buildOfflineAnswer(snapshot.fileCount)
     };
@@ -210,14 +228,15 @@ export async function runCodingAgent({
       onEvent
     );
     const result = await executeReadOnlyTool(parsed.call, {
-      workspaceRoot
+      workspaceRoot,
+      contextBudget
     });
     completeLatestStep(
       steps,
       result.summary,
       {
         ok: result.ok,
-        toolOutput: summarizeToolOutput(result)
+        toolOutput: summarizeToolOutput(result, contextBudget.maxToolOutputLength)
       },
       onEvent
     );
@@ -314,6 +333,7 @@ function buildRunResult({
       root: snapshot.root,
       fileCount: snapshot.fileCount
     },
+    contextBudget: snapshot.contextBudget,
     toolCallCount,
     answer,
     rawText
@@ -361,9 +381,9 @@ function completeLatestStep(
 
 function buildOfflineAnswer(fileCount: number): AgentAnswer {
   return {
-    title: "流式事件总线通道已就绪",
+    title: "上下文预算和工具边界已就绪",
     summary:
-      "当前运行在离线模式。V0.9 已经具备只读工具循环、结构化补丁提案、人工确认后的安全应用入口、运行历史、终端 CLI、续接上下文、Agent Event Bus 和 DeepSeek token streaming 接口；配置 DEEPSEEK_API_KEY 后模型可以通过 CLI 或 Web 流式输出。",
+      "当前运行在离线模式。V0.11 已经具备只读工具循环、结构化补丁提案、人工确认后的安全应用入口、运行历史、终端 CLI/TUI、续接上下文、Agent Event Bus、DeepSeek token streaming、上下文预算和显式工具边界；配置 DEEPSEEK_API_KEY 后模型可以通过 CLI、TUI 或 Web 流式输出。",
     plan: [
       "把 Web UI 作为任务入口，收集用户的编码目标。",
       `服务端先索引当前工作区的 ${fileCount} 个文本文件。`,
@@ -373,7 +393,8 @@ function buildOfflineAnswer(fileCount: number): AgentAnswer {
       "也可以通过 npm run agent -- \"目标\" 在终端里运行同一套 agent 内核。",
       "终端可通过 --stream 查看高层步骤事件，通过 --apply 审批补丁，通过 --validate 运行白名单验证。",
       "CLI 和 Web 都可以选择历史 run，把上一轮摘要、计划、风险、补丁元信息和验证结果作为本轮上下文。",
-      "Web 流式 API 会发送 run、step、model token、tool call 和 run completed 事件。"
+      "Web 流式 API 会发送 run、step、model token、tool call 和 run completed 事件。",
+      "V0.11 把上下文预算和工具边界显式化，模型只能请求低风险只读工具。"
     ],
     filesToInspect: [
       "src/app/api/agent/route.ts",
@@ -385,20 +406,24 @@ function buildOfflineAnswer(fileCount: number): AgentAnswer {
       "src/lib/agent/patches.ts",
       "src/lib/agent/validation.ts",
       "src/lib/agent/resume.ts",
+      "src/lib/agent/context-budget.ts",
+      "docs/CONTEXT_BUDGET.md",
       "src/app/api/agent/stream/route.ts"
     ],
     proposedChanges: [
-      "V0.10 可以基于同一套事件总线做真正的全屏 TUI 雏形。"
+      "V0.12 可以继续细化工具注册表，把 read/write/validation 的审批策略拆成可配置 policy，并给 TUI 增加独立工具面板。"
     ],
     risks: [
       "当前版本只读仓库，不会自动修改文件。",
       "上下文截断很简单，大仓库需要索引、检索和 token 预算。",
+      `当前工具边界：${describeToolBoundaries(READ_ONLY_TOOL_DEFINITIONS)}`,
       "DeepSeek key 只应放在服务端环境变量，不能暴露到浏览器。"
     ],
     nextActions: [
       "复制 .env.example 为 .env.local 并填写 DEEPSEEK_API_KEY。",
       "运行 npm run dev 后在浏览器中测试任务输入。",
       "运行 npm run agent -- --stream \"查看当前仓库状态\" 测试终端 token streaming。",
+      "调整 AGENT_CONTEXT_* 环境变量测试预算收敛效果。",
       "运行 npm run agent -- --continue <run-id> \"继续上一轮任务\" 测试恢复上下文。",
       "运行 npm run agent -- --validate typecheck \"检查当前实现\" 测试终端验证。"
     ]

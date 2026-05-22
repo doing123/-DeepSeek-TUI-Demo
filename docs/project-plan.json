@@ -22,7 +22,7 @@
     },
     {
       "name": "Agent Runner",
-      "description": "组织任务理解、仓库扫描、LLM 调用、事件总线、结果解析。"
+      "description": "组织任务理解、上下文预算、仓库扫描、LLM 调用、事件总线、结果解析。"
     },
     {
       "name": "DeepSeek Provider",
@@ -30,7 +30,7 @@
     },
     {
       "name": "Workspace Tools",
-      "description": "当前支持安全只读扫描、文件读取、文本搜索和 Git 状态读取，后续扩展 write_patch、run_command。"
+      "description": "当前支持带预算限制的安全只读扫描、文件读取、文本搜索和 Git 状态读取，后续扩展 write_patch、run_command。"
     },
     {
       "name": "README Generator",
@@ -56,6 +56,8 @@
     "DeepSeek provider：读取 DEEPSEEK_API_KEY、DEEPSEEK_BASE_URL、DEEPSEEK_MODEL。",
     "DeepSeek streaming：provider 支持 OpenAI-compatible SSE token 流并聚合 final content。",
     "Agent Event Bus：runner 输出 run、step、model stream、model token、tool call 和 run completed 事件。",
+    "上下文预算：AGENT_CONTEXT_* 环境变量控制文件索引、文件读取、搜索范围和工具输出长度。",
+    "工具边界：工具定义包含 category、risk、approvalRequired，当前模型只能请求低风险只读工具。",
     "离线模式：没有 API key 时仍能返回本地规划结果。",
     "工作区索引：忽略 .git、node_modules、.next 和真实 .env 文件，只暴露文本文件路径。",
     "只读工具循环：模型可通过严格 JSON 协议请求 list_files、read_file、search_text、git_status。",
@@ -97,7 +99,8 @@
     "V0.7 允许终端侧应用 patchProposal，但仍复用服务端同一套路径校验和 create/replace action 限制。",
     "V0.8 用本地 run history 生成续接提示，只携带用户可见的摘要、计划、风险、补丁元信息和验证结果。",
     "V0.9 把 runner 的回调升级为 Agent Event Bus，并用 SSE 让 Web 和后续 TUI 共享同一套事件协议。",
-    "V0.10 先用无依赖 ANSI alternate screen 做 TUI spike，验证终端布局和键盘事件，再决定是否引入专门 TUI 框架。"
+    "V0.10 先用无依赖 ANSI alternate screen 做 TUI spike，验证终端布局和键盘事件，再决定是否引入专门 TUI 框架。",
+    "V0.11 把 context budget 从隐含常量升级成显式运行配置，并把工具可调用边界写入类型和 prompt。"
   ],
   "contextDocuments": [
     {
@@ -119,6 +122,10 @@
     {
       "path": "docs/CLI.md",
       "description": "终端入口使用说明，记录 CLI 命令、续接能力和限制。"
+    },
+    {
+      "path": "docs/CONTEXT_BUDGET.md",
+      "description": "上下文预算和工具边界说明。"
     }
   ],
   "roadmap": [
@@ -226,10 +233,20 @@
       "version": "V0.11",
       "theme": "上下文预算与工具边界",
       "items": [
-        "context budget 配置",
-        "文件优先级策略",
-        "工具注册表分层",
-        "更清晰的审批策略"
+        "AGENT_CONTEXT_* 配置",
+        "预算写入 run result",
+        "工具 category/risk/approval 边界",
+        "模型工具输入预算夹紧"
+      ]
+    },
+    {
+      "version": "V0.12",
+      "theme": "工具策略与 TUI 工具面板",
+      "items": [
+        "可配置 tool policy",
+        "TUI 工具调用详情",
+        "验证/补丁审批面板增强",
+        "文件优先级策略"
       ]
     }
   ],

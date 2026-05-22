@@ -62,9 +62,9 @@ Observed ideas to learn from:
 
 ## Current State
 
-Version: V0.10
+Version: V0.11
 
-The current implementation is a Node.js 22 + Next.js 16 learning workbench plus a CLI and a dependency-free TUI spike. It has read-only tools, human-approved patch application, whitelist validation commands, local run history, Agent Event Bus, DeepSeek token streaming, terminal approval flow, and simple resume.
+The current implementation is a Node.js 22 + Next.js 16 learning workbench plus a CLI and a dependency-free TUI spike. It has read-only tools, explicit context budgets, human-approved patch application, whitelist validation commands, local run history, Agent Event Bus, DeepSeek token streaming, terminal approval flow, and simple resume.
 
 Implemented:
 
@@ -72,10 +72,14 @@ Implemented:
 - API route at `POST /api/agent`.
 - API route at `POST /api/agent/stream` for Server-Sent Event streaming.
 - Agent runner with high-level trace steps and typed event bus events.
+- Agent runner records an active context budget for each run.
 - Workspace text-file index with ignored heavy directories and real `.env` files.
+- `AGENT_CONTEXT_*` environment variables control file indexing, file reads, text search, and tool output truncation.
 - DeepSeek provider using OpenAI-compatible chat completions and SSE token streaming.
 - Provider-agnostic JSON tool-call protocol.
 - Read-only `list_files`, `read_file`, `search_text`, and `git_status` tools.
+- Tool definitions include `category`, `risk`, and `approvalRequired` so callable boundaries are visible to prompt, code, and docs.
+- Tool inputs from the model are clamped by the active context budget before local reads/searches.
 - Tool-call limit to avoid runaway loops.
 - UI trace entries for tool input and output summaries.
 - CLI entrypoint at `src/cli/agent.ts`, runnable with `npm run agent`.
@@ -117,6 +121,7 @@ Important files:
 - `src/app/api/agent/route.ts`
 - `src/app/api/agent/stream/route.ts`
 - `src/lib/agent/runner.ts`
+- `src/lib/agent/context-budget.ts`
 - `src/lib/agent/tools.ts`
 - `src/lib/agent/git-tools.ts`
 - `src/cli/agent.ts`
@@ -139,6 +144,7 @@ Important files:
 - `docs/DEBUGGING.md`
 - `docs/CLI.md`
 - `docs/TUI.md`
+- `docs/CONTEXT_BUDGET.md`
 
 ## Architecture Direction
 
@@ -157,7 +163,7 @@ UI / CLI
   -> Generated docs + architecture snapshot
 ```
 
-The V0.10 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 validation, V0.5 run history, V0.6 terminal shell, V0.7 CLI streaming/approval, V0.8 cross-surface continuation, V0.9 shared event stream, and adds a first full-screen terminal renderer:
+The V0.11 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 validation, V0.5 run history, V0.6 terminal shell, V0.7 CLI streaming/approval, V0.8 cross-surface continuation, V0.9 shared event stream, V0.10 full-screen terminal renderer, and adds explicit context budgets and visible tool boundaries:
 
 1. User submits a goal.
 2. Agent creates a turn state.
@@ -183,6 +189,8 @@ The V0.10 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 valid
 22. Web uses SSE to render live events; CLI uses the same events through the direct runner callback.
 23. TUI uses the same direct runner callback to render events in an alternate-screen terminal layout.
 24. TUI can continue from a selected saved run and apply a returned patch proposal through the existing safe patch module.
+25. Runner applies a central context budget before workspace indexing and tool execution.
+26. Tool definitions expose category, risk, and approval metadata; current model-callable tools remain low-risk read-only tools.
 
 Debugging uses the official Next.js 16 `next dev --inspect` path. Start `npm run dev:inspect:break`, attach VS Code with `Attach Next.js Server (9229)`, and run `npm run debug:check` to verify that the guarded `debugger` statement in `src/app/api/agent/route.ts` is reachable before testing normal source breakpoints.
 
@@ -334,7 +342,6 @@ Built:
 Do not build yet:
 
 - arbitrary shell execution from model output
-- context budget controls
 - full transcript replay
 
 ## V0.10 Completed
@@ -353,7 +360,25 @@ Do not build yet:
 
 - rich terminal component framework
 - arbitrary shell execution from model output
-- context budget controls
+- full transcript replay
+
+## V0.11 Completed
+
+Theme: context budget and tool boundaries.
+
+Built:
+
+- `src/lib/agent/context-budget.ts` for central budget defaults and env parsing.
+- `AGENT_CONTEXT_*` knobs in `.env.example`.
+- Active context budget recorded on run results and persisted run records.
+- Prompt-visible context budget details.
+- Tool definitions with `category`, `risk`, and `approvalRequired`.
+- Runtime clamping for model-provided `list_files`, `read_file`, and `search_text` limits.
+
+Do not build yet:
+
+- arbitrary shell execution from model output
+- configurable multi-category tool policy
 - full transcript replay
 
 ## Safety Rules
@@ -372,12 +397,13 @@ Use this prompt when starting the next version:
 ```txt
 You are continuing DeepSeek TUI Demo.
 
-Goal: implement V0.11, context-budget controls and stronger tool registry boundaries for a macOS-first coding-agent learning project built with Next.js and TypeScript.
+Goal: implement V0.12, configurable tool policy and richer TUI tool panels for a macOS-first coding-agent learning project built with Next.js and TypeScript.
 
 Read first:
 - docs/DEVELOPMENT_CONTEXT.md
 - docs/project-plan.json
 - src/lib/agent/runner.ts
+- src/lib/agent/context-budget.ts
 - src/lib/agent/prompts.ts
 - src/lib/agent/tools.ts
 - src/lib/agent/git-tools.ts
@@ -389,6 +415,7 @@ Read first:
 - src/lib/agent/workspace.ts
 - src/cli/agent.ts
 - src/cli/tui.ts
+- docs/CONTEXT_BUDGET.md
 
 Constraints:
 - Keep DeepSeek as the first provider.
@@ -397,11 +424,12 @@ Constraints:
 - Keep the existing read-only tools, including git_status.
 - Keep CLI/Web resume compatible through `resumeFromRunId`.
 - Keep the V0.10 TUI working.
+- Keep the V0.11 context budget controls working.
 - Keep human approval before writes.
 - Never execute model-suggested arbitrary commands.
 - Reuse the existing runner, run store, resume, patch, and validation modules.
-- Add explicit context-budget controls before adding more tools.
-- Make tool registration and approval boundaries easier to inspect.
+- Make tool policy configurable without allowing arbitrary shell execution.
+- Add a TUI tool panel that shows tool calls, tool status, and policy metadata.
 - Keep validation commands whitelist-only.
 - Do not store API keys or full hidden reasoning.
 - Update README through npm run readme:generate.

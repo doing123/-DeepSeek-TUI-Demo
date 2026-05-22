@@ -22,14 +22,14 @@ Open http://localhost:3000 and run a goal from the workbench.
 
 ## Architecture
 
-![Architecture v0.10.0](docs/architecture/architecture-v0.10.0.svg)
+![Architecture v0.11.0](docs/architecture/architecture-v0.11.0.svg)
 
 - **Next.js App**: 负责输入任务、展示 agent trace、展示实时事件、结构化建议和续接历史运行。
 - **CLI/TUI Shell**: 通过 npm run agent 和 npm run tui 复用 agent runner，提供终端入口、事件流、token 输出、运行历史回看和续接。
 - **API Route**: 运行在 Node.js 服务端，提供 JSON 和 SSE 两种 agent 请求入口。
-- **Agent Runner**: 组织任务理解、仓库扫描、LLM 调用、事件总线、结果解析。
+- **Agent Runner**: 组织任务理解、上下文预算、仓库扫描、LLM 调用、事件总线、结果解析。
 - **DeepSeek Provider**: 封装 OpenAI-compatible chat completions 和 SSE token streaming。
-- **Workspace Tools**: 当前支持安全只读扫描、文件读取、文本搜索和 Git 状态读取，后续扩展 write_patch、run_command。
+- **Workspace Tools**: 当前支持带预算限制的安全只读扫描、文件读取、文本搜索和 Git 状态读取，后续扩展 write_patch、run_command。
 - **README Generator**: 从项目规划数据和 package scripts 生成 README，并由 pre-commit hook 自动执行。
 
 Architecture snapshots are stored in `docs/architecture/` for version-to-version comparison.
@@ -54,6 +54,8 @@ Architecture snapshots are stored in `docs/architecture/` for version-to-version
 - DeepSeek provider：读取 DEEPSEEK_API_KEY、DEEPSEEK_BASE_URL、DEEPSEEK_MODEL。
 - DeepSeek streaming：provider 支持 OpenAI-compatible SSE token 流并聚合 final content。
 - Agent Event Bus：runner 输出 run、step、model stream、model token、tool call 和 run completed 事件。
+- 上下文预算：AGENT_CONTEXT_* 环境变量控制文件索引、文件读取、搜索范围和工具输出长度。
+- 工具边界：工具定义包含 category、risk、approvalRequired，当前模型只能请求低风险只读工具。
 - 离线模式：没有 API key 时仍能返回本地规划结果。
 - 工作区索引：忽略 .git、node_modules、.next 和真实 .env 文件，只暴露文本文件路径。
 - 只读工具循环：模型可通过严格 JSON 协议请求 list_files、read_file、search_text、git_status。
@@ -110,6 +112,7 @@ Sources:
 - V0.8 用本地 run history 生成续接提示，只携带用户可见的摘要、计划、风险、补丁元信息和验证结果。
 - V0.9 把 runner 的回调升级为 Agent Event Bus，并用 SSE 让 Web 和后续 TUI 共享同一套事件协议。
 - V0.10 先用无依赖 ANSI alternate screen 做 TUI spike，验证终端布局和键盘事件，再决定是否引入专门 TUI 框架。
+- V0.11 把 context budget 从隐含常量升级成显式运行配置，并把工具可调用边界写入类型和 prompt。
 
 ## Development Context
 
@@ -118,6 +121,7 @@ Sources:
 - `docs/architecture/`: 按版本保存架构图 SVG，方便横向对比系统演进。
 - `docs/DEBUGGING.md`: 服务端调试步骤，记录如何让浏览器请求触发 Next API 断点。
 - `docs/CLI.md`: 终端入口使用说明，记录 CLI 命令、续接能力和限制。
+- `docs/CONTEXT_BUDGET.md`: 上下文预算和工具边界说明。
 
 ## Roadmap
 
@@ -193,10 +197,17 @@ Sources:
 
 ### V0.11 · 上下文预算与工具边界
 
-- context budget 配置
+- AGENT_CONTEXT_* 配置
+- 预算写入 run result
+- 工具 category/risk/approval 边界
+- 模型工具输入预算夹紧
+
+### V0.12 · 工具策略与 TUI 工具面板
+
+- 可配置 tool policy
+- TUI 工具调用详情
+- 验证/补丁审批面板增强
 - 文件优先级策略
-- 工具注册表分层
-- 更清晰的审批策略
 
 ## Scripts
 

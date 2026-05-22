@@ -51,7 +51,7 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     {
       id: "runner",
       label: "Agent Runner",
-      detail: "目标理解 / 工具循环 / Event Bus",
+      detail: "目标理解 / context budget / Event Bus",
       x: 790,
       y: 170,
       w: 300,
@@ -81,7 +81,7 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     {
       id: "tools",
       label: "Read-only Tools",
-      detail: "list_files / read_file / search_text / git_status",
+      detail: "budget clamp / category / approval policy",
       x: 430,
       y: 345,
       w: 260,
@@ -243,6 +243,8 @@ function pickFeatureHighlights(features) {
       "流式 API",
       "DeepSeek streaming",
       "Agent Event Bus",
+      "上下文预算",
+      "工具边界",
       "实时运行视图",
       "Git 只读上下文",
       "验证命令串联",

@@ -6,7 +6,24 @@ All notable project changes are tracked here.
 
 ### Notes
 
-- Next planned focus: context-budget controls and stronger tool registry boundaries.
+- Next planned focus: configurable tool policy and richer TUI tool panels.
+
+## 0.11.0 - 2026-05-21
+
+### Added
+
+- Added `src/lib/agent/context-budget.ts` for explicit context budget controls.
+- Added `AGENT_CONTEXT_*` environment knobs to `.env.example`.
+- Added active context budget metadata to each agent run result.
+- Added tool boundary metadata: `category`, `risk`, and `approvalRequired`.
+- Added `docs/CONTEXT_BUDGET.md` for budget and tool boundary notes.
+
+### Changed
+
+- Clamped model-provided `list_files`, `read_file`, and `search_text` limits by the active context budget.
+- Included context budget details in prompts, CLI output, run records, and the Web result tags.
+- Updated project planning, handoff context, and generated architecture snapshots for V0.11.
+- Bumped project version to `0.11.0`.
 
 ## 0.10.0 - 2026-05-21
 
