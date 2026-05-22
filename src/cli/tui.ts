@@ -3,6 +3,7 @@ import path from "path";
 import { emitKeypressEvents } from "readline";
 import { createInterface as createPrompt } from "readline/promises";
 import { pathToFileURL } from "url";
+import { describeContextSelection } from "../lib/agent/context-selection";
 import { applyPatchProposal } from "../lib/agent/patches";
 import { buildResumePromptGoal } from "../lib/agent/resume";
 import { runCodingAgent } from "../lib/agent/runner";
@@ -281,6 +282,7 @@ function render(state: TuiState) {
   lines.push(row("Keys", "r run · n edit · ↑↓ select · c continue · a apply patch · q quit", leftWidth, "", "", rightWidth));
   lines.push(row("Resume", state.resumeRunId ?? "none", leftWidth, "", "", rightWidth));
   lines.push(row("Tool Calls", formatToolSummary(state), leftWidth, "Policy", formatPolicySummary(state.result), rightWidth));
+  lines.push(row("Context", formatContextSummary(state.result), leftWidth, "", "", rightWidth));
   lines.push("");
 
   const recentLines = formatRecentRuns(state.recentRuns, state.selectedIndex, leftWidth);
@@ -317,6 +319,10 @@ function render(state: TuiState) {
 
     if (state.result.toolPolicy) {
       lines.push(color(`Policy: ${describeToolPolicy(state.result.toolPolicy)}`, "dim"));
+    }
+
+    if (state.result.contextSelection) {
+      lines.push(color(`Context: ${describeContextSelection(state.result.contextSelection)}`, "dim"));
     }
   }
 
@@ -478,6 +484,14 @@ function formatPolicySummary(result: AgentRunResult | undefined) {
   }
 
   return `read=${result.toolPolicy.allowedReadTools.length} patch=${result.toolPolicy.patchProposal}`;
+}
+
+function formatContextSummary(result: AgentRunResult | undefined) {
+  if (!result?.contextSelection) {
+    return "available after run";
+  }
+
+  return `${result.contextSelection.selectedCount}/${result.contextSelection.candidateCount} selected`;
 }
 
 function formatInlineJson(value: unknown) {

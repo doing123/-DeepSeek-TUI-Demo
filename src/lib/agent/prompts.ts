@@ -29,6 +29,7 @@ export function buildCodingAgentMessages(
         "工具定义包含 category、risk、approvalRequired。当前模型只允许请求 category=read 且 approvalRequired=false 的工具。",
         "写文件、补丁应用和验证命令只能通过用户确认后的本地入口执行，不能由模型直接调用。",
         `当前 tool policy：read tools=[${toolPolicy.allowedReadTools.join(", ")}]，patchProposal=${toolPolicy.patchProposal}，validation=${toolPolicy.validationCommands}。`,
+        "workspace.files 是服务端按 contextSelection 选出的初始候选文件；如信息不足，应继续用 list_files/search_text/read_file 扩展上下文。",
         `最多请求 ${maxToolCalls} 次工具。信息足够时必须给 final。`,
         "必须返回严格 JSON，不要使用 Markdown 代码块。",
         `如果需要工具，返回：{"type":"tool_call","tool":{"name":"${toolNames}","input":{...}}}`,
@@ -48,9 +49,12 @@ export function buildCodingAgentMessages(
             root: snapshot.root,
             fileCount: snapshot.fileCount,
             contextBudget: snapshot.contextBudget,
+            contextSelection: snapshot.contextSelection,
             files: snapshot.files.map((file) => ({
               path: file.path,
-              size: file.size
+              size: file.size,
+              ...("score" in file ? { score: file.score } : {}),
+              ...("reasons" in file ? { reasons: file.reasons } : {})
             }))
           },
           toolPolicy,

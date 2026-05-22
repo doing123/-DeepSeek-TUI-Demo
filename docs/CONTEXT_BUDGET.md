@@ -7,6 +7,7 @@ workspace and tool set grow.
 
 ```bash
 AGENT_CONTEXT_MAX_FILES=160
+AGENT_CONTEXT_SELECTED_MAX_FILES=40
 AGENT_CONTEXT_READ_MAX_LENGTH=12000
 AGENT_CONTEXT_SEARCH_MAX_FILES=240
 AGENT_CONTEXT_SEARCH_MAX_MATCHES=24
@@ -15,6 +16,10 @@ AGENT_CONTEXT_TOOL_OUTPUT_MAX_LENGTH=1400
 
 The runner records the active budget on every run. Tool inputs from the model are
 clamped by this budget before any local file read or search happens.
+
+`AGENT_CONTEXT_SELECTED_MAX_FILES` controls how many indexed files are selected
+as the initial prompt file map after V0.13 scoring. The model can still use
+read-only tools to expand context after seeing the selected map.
 
 ## Tool Boundary
 

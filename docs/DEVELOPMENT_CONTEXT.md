@@ -62,9 +62,9 @@ Observed ideas to learn from:
 
 ## Current State
 
-Version: V0.12
+Version: V0.13
 
-The current implementation is a Node.js 22 + Next.js 16 learning workbench plus a CLI and a dependency-free TUI spike. It has read-only tools, explicit context budgets, configurable tool policy, human-approved patch application, whitelist validation commands, local run history, Agent Event Bus, DeepSeek token streaming, terminal approval flow, and simple resume.
+The current implementation is a Node.js 22 + Next.js 16 learning workbench plus a CLI and a dependency-free TUI spike. It has read-only tools, explicit context budgets, heuristic context selection, configurable tool policy, human-approved patch application, whitelist validation commands, local run history, Agent Event Bus, DeepSeek token streaming, terminal approval flow, and simple resume.
 
 Implemented:
 
@@ -73,8 +73,13 @@ Implemented:
 - API route at `POST /api/agent/stream` for Server-Sent Event streaming.
 - Agent runner with high-level trace steps and typed event bus events.
 - Agent runner records an active context budget for each run.
+- Agent runner records an active context selection snapshot for each run.
 - Workspace text-file index with ignored heavy directories and real `.env` files.
 - `AGENT_CONTEXT_*` environment variables control file indexing, file reads, text search, and tool output truncation.
+- `AGENT_CONTEXT_SELECTED_MAX_FILES` controls how many scored files enter the initial prompt file map.
+- `src/lib/agent/context-selection.ts` scores likely-relevant files by goal terms, path hints, concepts, module type, and size.
+- Prompt construction sends the selected initial file map plus selection reasons; tools can still expand context after that.
+- CLI, Web, TUI, and saved run records expose selected files, scores, and reasons.
 - DeepSeek provider using OpenAI-compatible chat completions and SSE token streaming.
 - Provider-agnostic JSON tool-call protocol.
 - Read-only `list_files`, `read_file`, `search_text`, and `git_status` tools.
@@ -129,6 +134,7 @@ Important files:
 - `src/app/api/agent/stream/route.ts`
 - `src/lib/agent/runner.ts`
 - `src/lib/agent/context-budget.ts`
+- `src/lib/agent/context-selection.ts`
 - `src/lib/agent/tool-policy.ts`
 - `src/lib/agent/tools.ts`
 - `src/lib/agent/git-tools.ts`
@@ -153,6 +159,7 @@ Important files:
 - `docs/CLI.md`
 - `docs/TUI.md`
 - `docs/CONTEXT_BUDGET.md`
+- `docs/CONTEXT_SELECTION.md`
 - `docs/TOOL_POLICY.md`
 
 ## Architecture Direction
@@ -172,7 +179,7 @@ UI / CLI
   -> Generated docs + architecture snapshot
 ```
 
-The V0.12 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 validation, V0.5 run history, V0.6 terminal shell, V0.7 CLI streaming/approval, V0.8 cross-surface continuation, V0.9 shared event stream, V0.10 full-screen terminal renderer, V0.11 context budgets/tool boundaries, and adds a local tool policy layer shared by prompt, runner, storage, CLI, Web, and TUI:
+The V0.13 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 validation, V0.5 run history, V0.6 terminal shell, V0.7 CLI streaming/approval, V0.8 cross-surface continuation, V0.9 shared event stream, V0.10 full-screen terminal renderer, V0.11 context budgets/tool boundaries, V0.12 local tool policy, and adds an explainable context-selection layer before prompt construction:
 
 1. User submits a goal.
 2. Agent creates a turn state.
@@ -199,11 +206,13 @@ The V0.12 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 valid
 23. TUI uses the same direct runner callback to render events in an alternate-screen terminal layout.
 24. TUI can continue from a selected saved run and apply a returned patch proposal through the existing safe patch module.
 25. Runner applies a central context budget before workspace indexing and tool execution.
-26. Tool definitions expose category, risk, and approval metadata; current model-callable tools remain low-risk read-only tools.
-27. Runner builds a tool policy snapshot from `AGENT_ALLOWED_READ_TOOLS` and `AGENT_PATCH_PROPOSAL`.
-28. Prompt construction exposes only policy-allowed tools.
-29. Runner enforces the same policy before executing tool calls.
-30. TUI and Web show policy metadata so users can understand why a run had a smaller tool surface.
+26. Runner scores indexed files by current goal, path, module hints, and size.
+27. Prompt construction receives only the selected initial file map plus selection metadata.
+28. Tool definitions expose category, risk, and approval metadata; current model-callable tools remain low-risk read-only tools.
+29. Runner builds a tool policy snapshot from `AGENT_ALLOWED_READ_TOOLS` and `AGENT_PATCH_PROPOSAL`.
+30. Prompt construction exposes only policy-allowed tools.
+31. Runner enforces the same policy before executing tool calls.
+32. CLI, Web, and TUI show context selection and policy metadata so users can understand why a run had a smaller prompt and tool surface.
 
 Debugging uses the official Next.js 16 `next dev --inspect` path. Start `npm run dev:inspect:break`, attach VS Code with `Attach Next.js Server (9229)`, and run `npm run debug:check` to verify that the guarded `debugger` statement in `src/app/api/agent/route.ts` is reachable before testing normal source breakpoints.
 
@@ -418,6 +427,26 @@ Do not build yet:
 - full transcript replay
 - LSP-aware file prioritization
 
+## V0.13 Completed
+
+Theme: file priority and context selection.
+
+Built:
+
+- `src/lib/agent/context-selection.ts` for deterministic heuristic file scoring.
+- `AGENT_CONTEXT_SELECTED_MAX_FILES` context budget knob.
+- Context selection snapshots on run results and saved run records.
+- Prompt-visible selected file map with score and reasons.
+- CLI/Web/TUI display for selected files, scores, and reasons.
+- `docs/CONTEXT_SELECTION.md` as the context-selection handoff note.
+
+Do not build yet:
+
+- embeddings or vector retrieval
+- LSP-aware symbol selection
+- arbitrary shell execution from model output
+- full transcript replay
+
 ## Safety Rules
 
 - macOS only for now.
@@ -434,13 +463,14 @@ Use this prompt when starting the next version:
 ```txt
 You are continuing DeepSeek TUI Demo.
 
-Goal: implement V0.13, file priority and context selection for a macOS-first coding-agent learning project built with Next.js and TypeScript.
+Goal: implement V0.14, model protocol repair and retry for a macOS-first coding-agent learning project built with Next.js and TypeScript.
 
 Read first:
 - docs/DEVELOPMENT_CONTEXT.md
 - docs/project-plan.json
 - src/lib/agent/runner.ts
 - src/lib/agent/context-budget.ts
+- src/lib/agent/context-selection.ts
 - src/lib/agent/tool-policy.ts
 - src/lib/agent/prompts.ts
 - src/lib/agent/tools.ts
@@ -454,6 +484,7 @@ Read first:
 - src/cli/agent.ts
 - src/cli/tui.ts
 - docs/CONTEXT_BUDGET.md
+- docs/CONTEXT_SELECTION.md
 - docs/TOOL_POLICY.md
 
 Constraints:
@@ -465,11 +496,13 @@ Constraints:
 - Keep the V0.10 TUI working.
 - Keep the V0.11 context budget controls working.
 - Keep the V0.12 tool policy controls working.
+- Keep the V0.13 context selection controls working.
 - Keep human approval before writes.
 - Never execute model-suggested arbitrary commands.
 - Reuse the existing runner, run store, resume, patch, and validation modules.
-- Add a file priority module that scores likely-relevant files without reading everything.
-- Use the priority data to explain context selection in CLI/Web/TUI.
+- Add a model response repair path for malformed JSON or protocol misses.
+- Allow at most one controlled retry with a compact repair instruction.
+- Keep repair logs as high-level visible steps, not hidden reasoning.
 - Keep validation commands whitelist-only.
 - Do not store API keys or full hidden reasoning.
 - Update README through npm run readme:generate.

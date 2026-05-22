@@ -11,6 +11,9 @@ V0.10 adds `npm run tui` for the first full-screen terminal interface. See
 V0.12 adds local tool policy output. CLI runs now print the active read-tool
 allowlist and patchProposal policy when the result includes policy metadata.
 
+V0.13 adds selected context output. CLI runs print the context-selection summary
+and the top selected files with scores and reasons.
+
 ## Usage
 
 ```bash
@@ -83,3 +86,6 @@ npm run agent -- --json "查看当前仓库有哪些风险"
 - Git context is exposed through the fixed read-only `git_status` tool.
 - Tool policy is controlled by `AGENT_ALLOWED_READ_TOOLS` and
   `AGENT_PATCH_PROPOSAL`. The prompt and runner use the same policy snapshot.
+- Initial context selection is controlled by `AGENT_CONTEXT_SELECTED_MAX_FILES`.
+  It is only the first prompt map; the model can still request more files
+  through read-only tools.

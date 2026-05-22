@@ -6,7 +6,25 @@ All notable project changes are tracked here.
 
 ### Notes
 
-- Next planned focus: file priority strategy and better context selection.
+- Next planned focus: model JSON repair, retry, and protocol stability.
+
+## 0.13.0 - 2026-05-22
+
+### Added
+
+- Added `src/lib/agent/context-selection.ts` for heuristic file priority scoring.
+- Added `AGENT_CONTEXT_SELECTED_MAX_FILES` to control initial prompt file selection.
+- Added context selection metadata to agent run results and saved run records.
+- Added selected context display in CLI, Web, and TUI outputs.
+- Added `docs/CONTEXT_SELECTION.md` for the current context-selection strategy.
+
+### Changed
+
+- Runner now indexes the workspace, then selects an explainable initial file map before building the prompt.
+- Prompt input now includes context selection metadata and only the selected initial file map.
+- Updated project planning with the next version line from V0.14 through V0.17.
+- Updated handoff context and generated architecture snapshots for V0.13.
+- Bumped project version to `0.13.0`.
 
 ## 0.12.0 - 2026-05-22
 

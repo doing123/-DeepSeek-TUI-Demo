@@ -3,6 +3,7 @@ import path from "path";
 import { createInterface } from "readline/promises";
 import { pathToFileURL } from "url";
 import { describeContextBudget } from "../lib/agent/context-budget";
+import { describeContextSelection } from "../lib/agent/context-selection";
 import { buildResumePromptGoal, formatResumeTitle } from "../lib/agent/resume";
 import { describeToolPolicy } from "../lib/agent/tool-policy";
 import type {
@@ -458,6 +459,9 @@ function printAgentResult(result: AgentRunResult | StoredAgentRunResult, options
   if (result.contextBudget) {
     console.log(`Context budget: ${describeContextBudget(result.contextBudget)}`);
   }
+  if (result.contextSelection) {
+    console.log(`Context selection: ${describeContextSelection(result.contextSelection)}`);
+  }
   if (result.toolPolicy) {
     console.log(`Tool policy: ${describeToolPolicy(result.toolPolicy)}`);
   }
@@ -466,6 +470,7 @@ function printAgentResult(result: AgentRunResult | StoredAgentRunResult, options
 
   printList("Plan", result.answer.plan);
   printList("Files To Inspect", result.answer.filesToInspect);
+  printContextSelection(result);
   printList("Proposed Changes", result.answer.proposedChanges);
   printList("Risks", result.answer.risks);
   printList("Next Actions", result.answer.nextActions);
@@ -474,6 +479,18 @@ function printAgentResult(result: AgentRunResult | StoredAgentRunResult, options
   if (options.trace) {
     printTrace(result);
   }
+}
+
+function printContextSelection(result: AgentRunResult | StoredAgentRunResult) {
+  if (!result.contextSelection) {
+    return;
+  }
+
+  console.log("Selected Context");
+  for (const file of result.contextSelection.files.slice(0, 10)) {
+    console.log(`- ${file.path} score=${file.score} reasons=${file.reasons.join(",")}`);
+  }
+  console.log("");
 }
 
 function printRunRecord(record: AgentRunRecord, options: CliOptions) {

@@ -6,6 +6,7 @@ import type { ContextBudget } from "./types";
 export function getContextBudget(env: NodeJS.ProcessEnv = process.env): ContextBudget {
   return {
     maxWorkspaceFiles: readBoundedInt(env.AGENT_CONTEXT_MAX_FILES, 160, 20, 500),
+    maxSelectedFiles: readBoundedInt(env.AGENT_CONTEXT_SELECTED_MAX_FILES, 40, 4, 160),
     maxReadLength: readBoundedInt(env.AGENT_CONTEXT_READ_MAX_LENGTH, 12_000, 1_000, 40_000),
     maxSearchFiles: readBoundedInt(env.AGENT_CONTEXT_SEARCH_MAX_FILES, 240, 20, 800),
     maxSearchMatches: readBoundedInt(env.AGENT_CONTEXT_SEARCH_MAX_MATCHES, 24, 1, 100),
@@ -16,6 +17,7 @@ export function getContextBudget(env: NodeJS.ProcessEnv = process.env): ContextB
 export function describeContextBudget(budget: ContextBudget) {
   return [
     `files<=${budget.maxWorkspaceFiles}`,
+    `selected<=${budget.maxSelectedFiles}`,
     `read<=${budget.maxReadLength}`,
     `searchFiles<=${budget.maxSearchFiles}`,
     `matches<=${budget.maxSearchMatches}`,

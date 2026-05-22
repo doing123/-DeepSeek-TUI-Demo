@@ -6,6 +6,7 @@ import type {
   AgentRunRecord,
   AgentRunResult,
   AgentRunSummary,
+  ContextSelection,
   PatchApplyResult,
   PatchProposal,
   ToolPolicySnapshot,
@@ -384,6 +385,11 @@ function AgentResultView({
                 budget {result.contextBudget.maxWorkspaceFiles} files
               </span>
             ) : null}
+            {result.contextSelection ? (
+              <span className="tag tag--neutral">
+                selected {result.contextSelection.selectedCount}
+              </span>
+            ) : null}
             {result.toolPolicy ? (
               <span className="tag tag--neutral">
                 policy {result.toolPolicy.allowedReadTools.length} tools
@@ -444,6 +450,23 @@ function AgentResultView({
             ))}
           </ul>
         </section>
+
+        {result.contextSelection ? (
+          <section className="panel">
+            <h3>上下文选择</h3>
+            <p className="summary">{formatContextSelectionSummary(result.contextSelection)}</p>
+            <ul className="list compact-list">
+              {result.contextSelection.files.slice(0, 10).map((file) => (
+                <li key={file.path}>
+                  <span className="step-title">{file.path}</span>
+                  <span className="step-meta">
+                    score {file.score} · {file.reasons.join(", ")}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         {result.toolPolicy ? (
           <section className="panel">
@@ -793,6 +816,11 @@ async function readErrorMessage(response: Response) {
 
 function formatJson(value: unknown) {
   return JSON.stringify(value, null, 2);
+}
+
+function formatContextSelectionSummary(selection: ContextSelection) {
+  const terms = selection.goalTerms.slice(0, 8).join(", ") || "none";
+  return `${selection.strategy} · selected ${selection.selectedCount}/${selection.candidateCount} · terms: ${terms}`;
 }
 
 function formatToolPolicySummary(policy: ToolPolicySnapshot) {

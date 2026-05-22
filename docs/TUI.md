@@ -4,6 +4,9 @@ V0.10 added a small dependency-free terminal UI spike. V0.12 keeps the same
 minimal renderer and adds a dedicated tool-call area plus the active tool policy
 summary, so a run looks closer to a practical coding-agent loop.
 
+V0.13 adds the active context-selection summary to the result area, showing how
+many indexed files were selected for the first prompt map.
+
 ```bash
 npm run tui
 npm run tui -- "查看当前仓库状态"
@@ -38,3 +41,13 @@ completes, it also shows the active policy from the run result:
 
 Use `AGENT_ALLOWED_READ_TOOLS` and `AGENT_PATCH_PROPOSAL` to test smaller tool
 surfaces from the terminal.
+
+## Context Selection
+
+The TUI shows context selection after a run completes:
+
+- selected file count versus indexed candidate count
+- strategy summary from `context-selection.ts`
+- selected context line in the result area
+
+Tune it with `AGENT_CONTEXT_SELECTED_MAX_FILES`.

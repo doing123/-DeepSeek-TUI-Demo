@@ -1,6 +1,10 @@
 import { randomUUID } from "crypto";
 import { describeContextBudget, getContextBudget } from "./context-budget";
 import {
+  describeContextSelection,
+  selectContextFiles
+} from "./context-selection";
+import {
   completeWithDeepSeek,
   getDeepSeekConfig,
   hasDeepSeekKey,
@@ -117,13 +121,28 @@ export async function runCodingAgent({
   const files = await listWorkspaceFiles(workspaceRoot, {
     maxFiles: contextBudget.maxWorkspaceFiles
   });
+  completeLatestStep(steps, `已索引 ${files.length} 个文本文件。`, {}, onEvent);
+
+  pushStep(
+    steps,
+    "选择初始上下文",
+    "根据任务目标、路径和文件类型为仓库文件打分，选择优先提供给模型的文件地图。",
+    {
+      kind: "system"
+    },
+    onEvent
+  );
+  const contextSelection = selectContextFiles(goal, files, {
+    maxFiles: contextBudget.maxSelectedFiles
+  });
   const snapshot: WorkspaceSnapshot = {
     root: workspaceRoot,
     fileCount: files.length,
     contextBudget,
-    files
+    contextSelection,
+    files: contextSelection.files
   };
-  completeLatestStep(steps, `已索引 ${snapshot.fileCount} 个文本文件。`, {}, onEvent);
+  completeLatestStep(steps, describeContextSelection(contextSelection), {}, onEvent);
 
   if (!hasDeepSeekKey(config)) {
     pushStep(
@@ -151,9 +170,10 @@ export async function runCodingAgent({
         fileCount: snapshot.fileCount
       },
       contextBudget,
+      contextSelection,
       toolPolicy,
       toolCallCount: 0,
-      answer: buildOfflineAnswer(snapshot.fileCount, toolPolicy)
+      answer: buildOfflineAnswer(snapshot.fileCount, contextSelection.selectedCount, toolPolicy)
     };
 
     onEvent?.({ type: "run_completed", result });
@@ -350,6 +370,7 @@ function buildRunResult({
   startedAt,
   steps,
   snapshot,
+  contextSelection,
   toolPolicy,
   toolCallCount,
   answer,
@@ -361,6 +382,7 @@ function buildRunResult({
   startedAt: string;
   steps: AgentStep[];
   snapshot: WorkspaceSnapshot;
+  contextSelection?: WorkspaceSnapshot["contextSelection"];
   toolPolicy: ToolPolicySnapshot;
   toolCallCount: number;
   answer: AgentAnswer;
@@ -380,6 +402,7 @@ function buildRunResult({
       fileCount: snapshot.fileCount
     },
     contextBudget: snapshot.contextBudget,
+    contextSelection: contextSelection ?? snapshot.contextSelection,
     toolPolicy,
     toolCallCount,
     answer,
@@ -426,14 +449,18 @@ function completeLatestStep(
   onEvent?.({ type: "step_completed", step: latest });
 }
 
-function buildOfflineAnswer(fileCount: number, toolPolicy: ToolPolicySnapshot): AgentAnswer {
+function buildOfflineAnswer(
+  fileCount: number,
+  selectedFileCount: number,
+  toolPolicy: ToolPolicySnapshot
+): AgentAnswer {
   return {
-    title: "上下文预算和工具策略已就绪",
+    title: "上下文选择已就绪",
     summary:
-      "当前运行在离线模式。V0.12 已经具备只读工具循环、结构化补丁提案、人工确认后的安全应用入口、运行历史、终端 CLI/TUI、续接上下文、Agent Event Bus、DeepSeek token streaming、上下文预算和可配置工具策略；配置 DEEPSEEK_API_KEY 后模型可以通过 CLI、TUI 或 Web 流式输出。",
+      "当前运行在离线模式。V0.13 已经具备只读工具循环、结构化补丁提案、人工确认后的安全应用入口、运行历史、终端 CLI/TUI、续接上下文、Agent Event Bus、DeepSeek token streaming、上下文预算、可配置工具策略和启发式文件优先级选择；配置 DEEPSEEK_API_KEY 后模型可以通过 CLI、TUI 或 Web 流式输出。",
     plan: [
       "把 Web UI 作为任务入口，收集用户的编码目标。",
-      `服务端先索引当前工作区的 ${fileCount} 个文本文件。`,
+      `服务端先索引当前工作区的 ${fileCount} 个文本文件，再选择 ${selectedFileCount} 个初始上下文候选。`,
       "模型通过严格 JSON 请求只读工具，服务端执行后把结果回填。",
       "模型在信息足够时输出结构化 final answer，可附带 patchProposal。",
       "用户在 UI 中审查 patchProposal 后，点击确认才会写入文件。",
@@ -441,7 +468,7 @@ function buildOfflineAnswer(fileCount: number, toolPolicy: ToolPolicySnapshot): 
       "终端可通过 --stream 查看高层步骤事件，通过 --apply 审批补丁，通过 --validate 运行白名单验证。",
       "CLI 和 Web 都可以选择历史 run，把上一轮摘要、计划、风险、补丁元信息和验证结果作为本轮上下文。",
       "Web 流式 API 会发送 run、step、model token、tool call 和 run completed 事件。",
-      "V0.12 把工具策略显式化，模型只能请求当前策略允许的低风险只读工具。"
+      "V0.13 把初始上下文选择显式化，模型先看到一组带选择原因的优先文件，再通过只读工具继续探索。"
     ],
     filesToInspect: [
       "src/app/api/agent/route.ts",
@@ -454,12 +481,14 @@ function buildOfflineAnswer(fileCount: number, toolPolicy: ToolPolicySnapshot): 
       "src/lib/agent/validation.ts",
       "src/lib/agent/resume.ts",
       "src/lib/agent/context-budget.ts",
+      "src/lib/agent/context-selection.ts",
       "src/lib/agent/tool-policy.ts",
       "docs/CONTEXT_BUDGET.md",
+      "docs/CONTEXT_SELECTION.md",
       "src/app/api/agent/stream/route.ts"
     ],
     proposedChanges: [
-      "V0.13 可以继续做文件优先级策略，让索引、检索和 read_file 更接近真实 coding agent 的上下文选择。"
+      "V0.14 可以继续做模型响应修复和协议重试，让 DeepSeek 偶发非 JSON 输出时也能更稳地恢复。"
     ],
     risks: [
       "当前版本只读仓库，不会自动修改文件。",
@@ -473,6 +502,7 @@ function buildOfflineAnswer(fileCount: number, toolPolicy: ToolPolicySnapshot): 
       "运行 npm run dev 后在浏览器中测试任务输入。",
       "运行 npm run agent -- --stream \"查看当前仓库状态\" 测试终端 token streaming。",
       "调整 AGENT_CONTEXT_* 环境变量测试预算收敛效果。",
+      "调整 AGENT_CONTEXT_SELECTED_MAX_FILES 测试初始上下文选择数量。",
       "运行 npm run agent -- --continue <run-id> \"继续上一轮任务\" 测试恢复上下文。",
       "运行 npm run agent -- --validate typecheck \"检查当前实现\" 测试终端验证。"
     ]

@@ -67,10 +67,25 @@ export type WorkspaceFile = {
 
 export type ContextBudget = {
   maxWorkspaceFiles: number;
+  maxSelectedFiles: number;
   maxReadLength: number;
   maxSearchFiles: number;
   maxSearchMatches: number;
   maxToolOutputLength: number;
+};
+
+export type ContextSelectedFile = WorkspaceFile & {
+  score: number;
+  reasons: string[];
+};
+
+export type ContextSelection = {
+  strategy: "heuristic-v1";
+  candidateCount: number;
+  maxSelectedFiles: number;
+  selectedCount: number;
+  goalTerms: string[];
+  files: ContextSelectedFile[];
 };
 
 export type ToolPolicySnapshot = {
@@ -85,6 +100,7 @@ export type WorkspaceSnapshot = {
   root: string;
   fileCount: number;
   contextBudget?: ContextBudget;
+  contextSelection?: ContextSelection;
   files: WorkspaceFile[];
 };
 
@@ -184,6 +200,7 @@ export type AgentRunResult = {
   steps: AgentStep[];
   workspace: Pick<WorkspaceSnapshot, "root" | "fileCount">;
   contextBudget?: ContextBudget;
+  contextSelection?: ContextSelection;
   toolPolicy?: ToolPolicySnapshot;
   toolCallCount: number;
   answer: AgentAnswer;

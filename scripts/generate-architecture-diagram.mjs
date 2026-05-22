@@ -51,7 +51,7 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     {
       id: "runner",
       label: "Agent Runner",
-      detail: "目标理解 / context budget / tool policy / Event Bus",
+      detail: "目标理解 / context selection / tool policy / Event Bus",
       x: 790,
       y: 170,
       w: 300,
@@ -244,6 +244,8 @@ function pickFeatureHighlights(features) {
       "DeepSeek streaming",
       "Agent Event Bus",
       "上下文预算",
+      "上下文选择",
+      "文件优先级",
       "工具边界",
       "工具策略",
       "Patch 策略",
