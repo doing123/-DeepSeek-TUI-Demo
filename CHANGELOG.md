@@ -6,7 +6,24 @@ All notable project changes are tracked here.
 
 ### Notes
 
-- Next planned focus: richer multi-turn TUI session input and run filtering.
+- Next planned focus: approval profiles and safer trust boundaries.
+
+## 0.18.0 - 2026-05-22
+
+### Added
+
+- Added DeepSeek-TUI gap analysis and a ten-version roadmap through V0.27.
+- Added `docs/TUI_SESSION.md` for the current terminal session workflow.
+- Added TUI recent-run filtering by `all`, `plan`, `agent`, or `apply`.
+- Added in-process TUI turn history for the current terminal session.
+- Added mode-aware continuation: continuing a saved run now inherits its saved session mode.
+
+### Changed
+
+- TUI recent runs now show session mode, tool count, patch count, validation count, and continuation source.
+- TUI status rows now show the active recent-run filter and visible/total run counts.
+- Updated handoff context, project planning, and generated architecture snapshots for V0.18.
+- Bumped project version to `0.18.0`.
 
 ## 0.17.0 - 2026-05-22
 

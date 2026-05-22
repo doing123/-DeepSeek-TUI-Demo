@@ -592,9 +592,9 @@ function buildOfflineAnswer(
   const modeLine = describeAgentSessionMode(sessionMode);
 
   return {
-    title: "会话模式骨架已就绪",
+    title: "TUI 会话工作流已就绪",
     summary:
-      `当前运行在离线模式，session mode 为 ${sessionMode}。V0.17 已经具备 plan/agent/apply 会话模式骨架、只读工具循环、结构化补丁提案、补丁 diff 审查、人工确认后的安全应用入口、应用后验证闭环、运行历史、终端 CLI/TUI、续接上下文、Agent Event Bus、DeepSeek token streaming、上下文预算、上下文选择、可配置工具策略和模型协议修复。`,
+      `当前运行在离线模式，session mode 为 ${sessionMode}。V0.18 已经具备 plan/agent/apply 会话模式骨架、只读工具循环、结构化补丁提案、补丁 diff 审查、人工确认后的安全应用入口、应用后验证闭环、运行历史、终端 CLI/TUI、续接上下文、Agent Event Bus、DeepSeek token streaming、上下文预算、上下文选择、可配置工具策略、模型协议修复、TUI 最近运行过滤和 DeepSeek-TUI 差距规划。`,
     plan: [
       `本轮会话模式：${modeLine}。`,
       "把 Web UI 作为任务入口，收集用户的编码目标。",
@@ -609,7 +609,8 @@ function buildOfflineAnswer(
       "终端可通过 --stream 查看高层步骤事件，通过 --apply 审批补丁，通过 --validate 运行白名单验证。",
       "CLI 和 Web 都可以选择历史 run，把上一轮摘要、计划、风险、补丁元信息和验证结果作为本轮上下文。",
       "Web 流式 API 会发送 run、step、model token、tool call 和 run completed 事件。",
-      "V0.14 在模型输出不符合 JSON 协议时会记录错误分类，并最多发送一次受控修复提示。"
+      "V0.14 在模型输出不符合 JSON 协议时会记录错误分类，并最多发送一次受控修复提示。",
+      "V0.18 在 TUI 中增加最近运行过滤、会话模式继承和更完整的运行元信息，便于学习多轮 agent 工作流。"
     ],
     filesToInspect: [
       "src/app/api/agent/route.ts",
@@ -625,16 +626,19 @@ function buildOfflineAnswer(
       "src/lib/agent/context-selection.ts",
       "src/lib/agent/model-protocol.ts",
       "src/lib/agent/tool-policy.ts",
+      "src/cli/tui.ts",
       "docs/CONTEXT_BUDGET.md",
       "docs/CONTEXT_SELECTION.md",
       "docs/MODEL_PROTOCOL.md",
       "docs/PATCH_DIFF.md",
       "docs/VALIDATION_LOOP.md",
       "docs/SESSION_MODES.md",
+      "docs/TUI_SESSION.md",
+      "docs/DEEPSEEK_TUI_GAP_ANALYSIS.md",
       "src/app/api/agent/stream/route.ts"
     ],
     proposedChanges: [
-      "V0.18 可以继续做会话模式下的 TUI 多轮输入和更清晰的任务队列视图。"
+      "V0.19 可以继续做 approval profiles 和 trust boundary，把 DeepSeek-TUI 的人工审批/信任策略显式建模。"
     ],
     risks: [
       "当前版本默认不会自动修改文件，所有 patchProposal 写入仍需要人工确认。",

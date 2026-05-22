@@ -22,7 +22,7 @@ Open http://localhost:3000 and run a goal from the workbench.
 
 ## Architecture
 
-![Architecture v0.17.0](docs/architecture/architecture-v0.17.0.svg)
+![Architecture v0.18.0](docs/architecture/architecture-v0.18.0.svg)
 
 - **Next.js App**: 负责输入任务、展示 agent trace、展示实时事件、结构化建议和续接历史运行。
 - **CLI/TUI Shell**: 通过 npm run agent 和 npm run tui 复用 agent runner，提供终端入口、事件流、token 输出、运行历史回看和续接。
@@ -79,6 +79,9 @@ Architecture snapshots are stored in `docs/architecture/` for version-to-version
 - Plan 模式：本地禁用 patchProposal，确保规划轮只读输出。
 - Apply 模式：prompt 提示模型优先产出可审查 patchProposal，但仍保留人工审批、diff 和验证边界。
 - TUI 模式切换：按 m 在 plan、agent、apply 之间切换。
+- TUI 运行筛选：按 f 在 all、plan、agent、apply 历史运行之间切换。
+- TUI 会话续接：继续历史 run 时继承其 sessionMode，并显示工具、补丁、验证和续接来源。
+- DeepSeek-TUI 差距分析：docs/DEEPSEEK_TUI_GAP_ANALYSIS.md 记录与真实 DeepSeek-TUI 的主要差距和十版路线。
 - 离线模式：没有 API key 时仍能返回本地规划结果。
 - 工作区索引：忽略 .agent-runs、.git、node_modules、.next 和真实 .env 文件，只暴露文本文件路径。
 - 只读工具循环：模型可通过严格 JSON 协议请求 list_files、read_file、search_text、git_status。
@@ -144,6 +147,7 @@ Sources:
 - V0.15 把 patchProposal 从完整文件内容预览推进到 diff 审查，让人工审批更接近真实 coding agent 的写入边界。
 - V0.16 把验证结果接到补丁应用之后，让 coding agent 的下一轮能看到改动是否真的通过检查。
 - V0.17 把 plan/agent/apply 模式贯穿到 prompt、运行记录和终端控制，让项目更接近 DeepSeek-TUI 的交互骨架。
+- V0.18 对照真实 DeepSeek-TUI 梳理功能差距，并让 TUI 历史运行可按模式筛选和续接。
 
 ## Development Context
 
@@ -159,6 +163,8 @@ Sources:
 - `docs/PATCH_DIFF.md`: 补丁 diff 预览和写入前风险审查说明。
 - `docs/VALIDATION_LOOP.md`: 补丁应用后的验证闭环和 run history 写回说明。
 - `docs/SESSION_MODES.md`: plan、agent、apply 会话模式和安全边界说明。
+- `docs/TUI_SESSION.md`: TUI 会话筛选、续接和本地 turn history 说明。
+- `docs/DEEPSEEK_TUI_GAP_ANALYSIS.md`: 与真实 DeepSeek-TUI 的功能差距和十版后续路线。
 
 ## Roadmap
 
@@ -287,6 +293,69 @@ Sources:
 - 运行记录按模式筛选
 - 模式状态栏优化
 - 更接近 DeepSeek-TUI 的交互骨架
+
+### V0.19 · 审批模式与信任边界
+
+- approvalMode=ask|trusted-read|trusted-write
+- Web/CLI/TUI 展示审批模式
+- 写入仍默认人工确认
+- 为未来 YOLO/trust 做安全铺垫
+
+### V0.20 · Checklist 工作流
+
+- AgentAnswer checklist
+- Web/CLI/TUI checklist 展示
+- run history 持久化 checklist 摘要
+- 续接时携带 checklist 状态
+
+### V0.21 · 本地配置文件
+
+- 配置 schema
+- 项目配置与 env 合并
+- 本地私有配置忽略
+- 危险配置 denylist
+
+### V0.22 · 项目指令与记忆
+
+- 加载 AGENTS 风格指令
+- 本地 memory notes
+- prompt 注入边界展示
+- 续接时引用指令摘要
+
+### V0.23 · 安全命令提案
+
+- 模型只提出 commandProposal
+- 命令执行前审批
+- 命令白名单匹配
+- 命令提案写入 run history
+
+### V0.24 · 补丁回滚快照
+
+- 应用补丁前保存 before snapshot
+- run history 暴露 rollback metadata
+- CLI/TUI 回滚入口
+- 回滚路径校验
+
+### V0.25 · Web fetch 只读工具
+
+- fetch_url 只读工具
+- 默认策略禁用网络工具
+- 大小和 host guardrails
+- trace 展示 fetched source
+
+### V0.26 · 模型配置 profiles
+
+- DeepSeek model profiles
+- thinking/reasoning 配置
+- 所有界面展示 active profile
+- API key 仍只在本地服务端
+
+### V0.27 · 上下文与成本遥测
+
+- prompt/tool/output size 估算
+- run record 保存 telemetry
+- Web/CLI/TUI 展示 compact telemetry
+- 第十个版本后暂停确认
 
 ## Scripts
 

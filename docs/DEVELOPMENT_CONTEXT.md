@@ -62,9 +62,9 @@ Observed ideas to learn from:
 
 ## Current State
 
-Version: V0.17
+Version: V0.18
 
-The current implementation is a Node.js 22 + Next.js 16 learning workbench plus a CLI and a dependency-free TUI spike. It has read-only tools, explicit session modes, explicit context budgets, heuristic context selection, configurable tool policy, model protocol repair, server-side patch diff preview, human-approved patch application, post-patch validation, local run history, Agent Event Bus, DeepSeek token streaming, terminal approval flow, and simple resume.
+The current implementation is a Node.js 22 + Next.js 16 learning workbench plus a CLI and a dependency-free TUI spike. It has read-only tools, explicit session modes, mode-aware TUI run filtering, explicit context budgets, heuristic context selection, configurable tool policy, model protocol repair, server-side patch diff preview, human-approved patch application, post-patch validation, local run history, Agent Event Bus, DeepSeek token streaming, terminal approval flow, and simple resume.
 
 Implemented:
 
@@ -101,6 +101,10 @@ Implemented:
 - Run results, run summaries, event streams, CLI, Web, and TUI expose the active session mode.
 - CLI supports `--mode plan|agent|apply`; `--apply` defaults to `apply` when no explicit mode is passed.
 - TUI supports `m` to cycle plan/agent/apply before running a goal.
+- TUI supports `f` to filter recent runs by `all`, `plan`, `agent`, or `apply`.
+- TUI continuation inherits the selected run's saved session mode.
+- TUI recent-run rows show session mode, tool count, patch count, validation count, and continuation source.
+- `docs/DEEPSEEK_TUI_GAP_ANALYSIS.md` records the gap against real DeepSeek-TUI and a ten-version roadmap through V0.27.
 - Read-only `list_files`, `read_file`, `search_text`, and `git_status` tools.
 - Tool definitions include `category`, `risk`, and `approvalRequired` so callable boundaries are visible to prompt, code, and docs.
 - `src/lib/agent/tool-policy.ts` turns environment variables into a run-level tool policy snapshot.
@@ -178,6 +182,8 @@ Important files:
 - `docs/DEBUGGING.md`
 - `docs/CLI.md`
 - `docs/TUI.md`
+- `docs/TUI_SESSION.md`
+- `docs/DEEPSEEK_TUI_GAP_ANALYSIS.md`
 - `docs/CONTEXT_BUDGET.md`
 - `docs/CONTEXT_SELECTION.md`
 - `docs/MODEL_PROTOCOL.md`
@@ -242,6 +248,7 @@ The V0.17 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 valid
 35. Prompt construction exposes only policy-allowed tools.
 36. Runner enforces the same policy before executing tool calls.
 37. CLI, Web, and TUI show context selection, protocol repair, patch diff, validation trigger, session mode, and policy metadata so users can understand why a run had a smaller prompt/tool surface, stayed read-only, needed repair, proposed risky writes, or failed verification.
+38. TUI can filter recent runs by session mode and continue with the selected run's saved mode.
 
 Debugging uses the official Next.js 16 `next dev --inspect` path. Start `npm run dev:inspect:break`, attach VS Code with `Attach Next.js Server (9229)`, and run `npm run debug:check` to verify that the guarded `debugger` statement in `src/app/api/agent/route.ts` is reachable before testing normal source breakpoints.
 
@@ -561,6 +568,26 @@ Do not build yet:
 - automatic patch application without human approval
 - multi-agent/sub-agent routing
 
+## V0.18 Completed
+
+Theme: TUI session workflow and DeepSeek-TUI gap planning.
+
+Built:
+
+- TUI `f` key to filter recent runs by `all`, `plan`, `agent`, or `apply`.
+- TUI recent-run rows now include mode, tool count, patch count, validation count, and continuation source.
+- TUI continuation now inherits the selected run's saved `sessionMode`.
+- TUI in-process turn history for the current terminal session.
+- `docs/TUI_SESSION.md` as the TUI session workflow handoff note.
+- `docs/DEEPSEEK_TUI_GAP_ANALYSIS.md` with the major gaps versus real DeepSeek-TUI and a ten-version roadmap through V0.27.
+
+Do not build yet:
+
+- approval profiles
+- YOLO/trust automation
+- arbitrary model-suggested shell commands
+- background task queues
+
 ## Safety Rules
 
 - macOS only for now.
@@ -577,7 +604,7 @@ Use this prompt when starting the next version:
 ```txt
 You are continuing DeepSeek TUI Demo.
 
-Goal: implement V0.18, richer multi-turn TUI session input and run filtering for a macOS-first coding-agent learning project built with Next.js and TypeScript.
+Goal: implement V0.19, approval profiles and safer trust boundaries for a macOS-first coding-agent learning project built with Next.js and TypeScript.
 
 Read first:
 - docs/DEVELOPMENT_CONTEXT.md
@@ -605,6 +632,8 @@ Read first:
 - docs/PATCH_DIFF.md
 - docs/VALIDATION_LOOP.md
 - docs/SESSION_MODES.md
+- docs/TUI_SESSION.md
+- docs/DEEPSEEK_TUI_GAP_ANALYSIS.md
 
 Constraints:
 - Keep DeepSeek as the first provider.
@@ -620,12 +649,13 @@ Constraints:
 - Keep the V0.15 patch diff preview controls working.
 - Keep the V0.16 post-patch validation controls working.
 - Keep the V0.17 plan/agent/apply session modes working.
+- Keep the V0.18 TUI recent-run filtering and mode-aware continuation working.
 - Keep human approval before writes.
 - Never execute model-suggested arbitrary commands.
 - Reuse the existing runner, run store, resume, patch, and validation modules.
-- Improve the TUI loop around multi-turn use: mode-aware recent-run display, simple mode filtering, and clearer continuation state.
-- Keep the implementation dependency-free unless the value of a TUI framework becomes obvious.
-- Preserve sessionMode in any new run filtering or continuation affordance.
+- Add approval profiles such as ask, trusted-read, and trusted-write as metadata and policy surfaces.
+- Keep writes human-approved by default; do not implement YOLO automation yet.
+- Surface approval mode in prompt, run result, Web, CLI, TUI, and docs.
 - Keep patch application behind explicit human approval.
 - Keep validation commands whitelist-only.
 - Do not store API keys or full hidden reasoning.

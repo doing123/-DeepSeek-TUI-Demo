@@ -51,7 +51,7 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     {
       id: "runner",
       label: "Agent Runner",
-      detail: "session mode / context / repair / validation",
+      detail: "session mode / TUI filter / repair / validation",
       x: 790,
       y: 170,
       w: 300,
@@ -230,6 +230,9 @@ function pickFeatureHighlights(features) {
   const keywords = [
     "应用后验证",
     "会话模式",
+    "TUI 运行筛选",
+    "TUI 会话续接",
+    "DeepSeek-TUI 差距分析",
     "Plan 模式",
     "Apply 模式",
     "TUI 模式切换",

@@ -41,9 +41,11 @@ type TuiState = {
   workspaceRoot: string;
   goal: string;
   sessionMode: AgentSessionMode;
+  recentFilter: AgentSessionMode | "all";
   recentRuns: AgentRunSummary[];
   selectedIndex: number;
   resumeRunId?: string;
+  goalHistory: string[];
   isRunning: boolean;
   status: string;
   events: string[];
@@ -81,8 +83,10 @@ async function main() {
     workspaceRoot,
     goal: options.goal,
     sessionMode: options.sessionMode,
+    recentFilter: "all",
     recentRuns: await listAgentRunSummaries(workspaceRoot),
     selectedIndex: 0,
+    goalHistory: [],
     isRunning: false,
     status: "Ready",
     events: [],
@@ -172,7 +176,7 @@ async function runInteractiveTui(state: TuiState) {
     }
 
     if (key.name === "down") {
-      state.selectedIndex = Math.min(state.recentRuns.length - 1, state.selectedIndex + 1);
+      state.selectedIndex = Math.max(0, Math.min(filteredRecentRuns(state).length - 1, state.selectedIndex + 1));
       render(state);
       return;
     }
@@ -192,6 +196,14 @@ async function runInteractiveTui(state: TuiState) {
     if (key.name === "m") {
       state.sessionMode = nextSessionMode(state.sessionMode);
       state.status = `Mode: ${describeAgentSessionMode(state.sessionMode)}`;
+      render(state);
+      return;
+    }
+
+    if (key.name === "f") {
+      state.recentFilter = nextRecentFilter(state.recentFilter);
+      state.selectedIndex = 0;
+      state.status = `Recent filter: ${state.recentFilter}`;
       render(state);
       return;
     }
@@ -274,6 +286,8 @@ async function runTuiAgent(state: TuiState) {
 
     await saveAgentRunRecord(state.workspaceRoot, result);
     state.recentRuns = await listAgentRunSummaries(state.workspaceRoot);
+    state.goalHistory = [state.goal, ...state.goalHistory.filter((goal) => goal !== state.goal)].slice(0, 6);
+    state.selectedIndex = 0;
     state.result = result;
     state.status = `Saved ${result.id}`;
   } catch (error) {
@@ -312,21 +326,22 @@ function render(state: TuiState) {
   const leftWidth = Math.max(34, Math.min(46, Math.floor(width * 0.38)));
   const rightWidth = Math.max(32, width - leftWidth - 3);
   const lines: string[] = [];
-  const selected = state.recentRuns[state.selectedIndex];
+  const visibleRuns = filteredRecentRuns(state);
+  const selected = visibleRuns[state.selectedIndex];
 
   lines.push(color("DeepSeek TUI Demo", "cyan"));
   lines.push(`Workspace: ${truncate(state.workspaceRoot, width - 11)}`);
   lines.push("");
   lines.push(row("Goal", state.goal, leftWidth, "Live Events", state.status, rightWidth));
-  lines.push(row("Keys", "r run · m mode · n edit · ↑↓ select · c continue · a apply · v validate · q quit", leftWidth, "", "", rightWidth));
+  lines.push(row("Keys", "r run · m mode · f filter · n edit · ↑↓ select · c continue · a apply · v validate · q quit", leftWidth, "", "", rightWidth));
   lines.push(row("Mode", describeAgentSessionMode(state.sessionMode), leftWidth, "", "", rightWidth));
-  lines.push(row("Resume", state.resumeRunId ?? "none", leftWidth, "", "", rightWidth));
+  lines.push(row("Resume", state.resumeRunId ?? "none", leftWidth, "Recent", `${state.recentFilter} ${visibleRuns.length}/${state.recentRuns.length}`, rightWidth));
   lines.push(row("Tool Calls", formatToolSummary(state), leftWidth, "Policy", formatPolicySummary(state.result), rightWidth));
   lines.push(row("Context", formatContextSummary(state.result), leftWidth, "", "", rightWidth));
   lines.push(row("Protocol", formatProtocolSummary(state.result), leftWidth, "", "", rightWidth));
   lines.push("");
 
-  const recentLines = formatRecentRuns(state.recentRuns, state.selectedIndex, leftWidth);
+  const recentLines = formatRecentRuns(visibleRuns, state.selectedIndex, leftWidth, state.recentFilter);
   const eventLines = state.events.length > 0 ? state.events : ["No events yet."];
   const toolLines = state.toolEvents.length > 0
     ? ["Tool Calls", ...state.toolEvents]
@@ -348,6 +363,14 @@ function render(state: TuiState) {
   lines.push("");
   lines.push(color("Model Stream", "cyan"));
   lines.push(...wrap(state.streamText || "Waiting for model output...", width).slice(0, 8));
+
+  if (state.goalHistory.length > 0) {
+    lines.push("");
+    lines.push(color("Turn History", "cyan"));
+    lines.push(...state.goalHistory.slice(0, 4).map((goal, index) =>
+      truncate(`${index + 1}. ${goal}`, width)
+    ));
+  }
 
   if (state.result) {
     lines.push("");
@@ -388,23 +411,33 @@ function render(state: TuiState) {
   }
 }
 
-function formatRecentRuns(runs: AgentRunSummary[], selectedIndex: number, width: number) {
+function formatRecentRuns(
+  runs: AgentRunSummary[],
+  selectedIndex: number,
+  width: number,
+  filter: AgentSessionMode | "all"
+) {
   if (runs.length === 0) {
-    return ["Recent Runs", "No saved runs yet."];
+    return [`Recent Runs (${filter})`, "No saved runs for this filter."];
   }
 
-  const lines = ["Recent Runs"];
+  const lines = [`Recent Runs (${filter})`];
   for (const [index, run] of runs.slice(0, 8).entries()) {
     const marker = index === selectedIndex ? ">" : " ";
+    const meta = `${run.sessionMode ?? "agent"} · tools=${run.toolCallCount} · patch=${run.patchFileCount} · checks=${run.validationCount}`;
     lines.push(`${marker} ${truncate(run.title, width - 2)}`);
+    lines.push(`  ${truncate(meta, width - 2)}`);
     lines.push(`  ${truncate(run.goal, width - 2)}`);
+    if (run.resumeFromRunId) {
+      lines.push(`  ${truncate(`continued from ${run.resumeFromRunId}`, width - 2)}`);
+    }
   }
 
   return lines;
 }
 
 function continueSelectedRun(state: TuiState) {
-  const selected = state.recentRuns[state.selectedIndex];
+  const selected = filteredRecentRuns(state)[state.selectedIndex];
 
   if (!selected) {
     state.status = "No run selected";
@@ -412,13 +445,26 @@ function continueSelectedRun(state: TuiState) {
   }
 
   state.resumeRunId = selected.id;
+  state.sessionMode = selected.sessionMode ?? "agent";
   state.goal = `继续上一轮任务：${selected.goal}\n\n本轮目标：`;
-  state.status = `Continuing ${selected.id}`;
+  state.status = `Continuing ${selected.id} as ${state.sessionMode}`;
 }
 
 function nextSessionMode(current: AgentSessionMode) {
   const index = AGENT_SESSION_MODES.indexOf(current);
   return AGENT_SESSION_MODES[(index + 1) % AGENT_SESSION_MODES.length] ?? "agent";
+}
+
+function nextRecentFilter(current: AgentSessionMode | "all") {
+  const filters: Array<AgentSessionMode | "all"> = ["all", ...AGENT_SESSION_MODES];
+  const index = filters.indexOf(current);
+  return filters[(index + 1) % filters.length] ?? "all";
+}
+
+function filteredRecentRuns(state: TuiState) {
+  return state.recentFilter === "all"
+    ? state.recentRuns
+    : state.recentRuns.filter((run) => (run.sessionMode ?? "agent") === state.recentFilter);
 }
 
 async function editGoal(
@@ -671,6 +717,7 @@ Usage:
 Keys:
   r / enter  Run current goal
   m          Cycle session mode: plan / agent / apply
+  f          Cycle recent-run filter: all / plan / agent / apply
   n          Edit goal
   up/down    Select recent run
   c          Continue selected run
