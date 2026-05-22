@@ -23,6 +23,11 @@ import {
 } from "./prompts";
 import { previewPatchProposal } from "./patches";
 import {
+  applySessionModeToToolPolicy,
+  describeAgentSessionMode,
+  normalizeAgentSessionMode
+} from "./session-mode";
+import {
   describeToolPolicy,
   filterToolsByPolicy,
   getToolPolicy,
@@ -40,6 +45,7 @@ import type {
   AgentAnswer,
   AgentRunEvent,
   AgentRunResult,
+  AgentSessionMode,
   AgentStep,
   ModelProtocolError,
   ModelProtocolErrorCode,
@@ -55,6 +61,7 @@ type RunCodingAgentInput = {
   goal: string;
   promptGoal?: string;
   resumeFromRunId?: string;
+  sessionMode?: AgentSessionMode;
   streamModel?: boolean;
   workspaceRoot: string;
   onEvent?: (event: AgentRunEvent) => void;
@@ -66,6 +73,7 @@ export async function runCodingAgent({
   goal,
   promptGoal,
   resumeFromRunId,
+  sessionMode: inputSessionMode,
   streamModel = false,
   workspaceRoot,
   onEvent
@@ -74,7 +82,8 @@ export async function runCodingAgent({
   const steps: AgentStep[] = [];
   const config = getDeepSeekConfig();
   const contextBudget = getContextBudget();
-  const toolPolicy = getToolPolicy();
+  const sessionMode = normalizeAgentSessionMode(inputSessionMode);
+  const toolPolicy = applySessionModeToToolPolicy(getToolPolicy(), sessionMode);
   const protocolRepairPolicy = getProtocolRepairPolicy();
   const availableTools = filterToolsByPolicy(READ_ONLY_TOOL_DEFINITIONS, toolPolicy);
   const modelGoal = promptGoal ?? goal;
@@ -82,11 +91,23 @@ export async function runCodingAgent({
   onEvent?.({
     type: "run_started",
     goal,
+    sessionMode,
     startedAt,
     resumeFromRunId
   });
 
   pushStep(steps, "理解目标", `收到任务：${goal}`, { kind: "system" }, onEvent);
+  completeLatestStep(steps, undefined, {}, onEvent);
+
+  pushStep(
+    steps,
+    "应用会话模式",
+    describeAgentSessionMode(sessionMode),
+    {
+      kind: "system"
+    },
+    onEvent
+  );
   completeLatestStep(steps, undefined, {}, onEvent);
 
   if (resumeFromRunId) {
@@ -186,6 +207,7 @@ export async function runCodingAgent({
       id: randomUUID(),
       goal,
       resumeFromRunId,
+      sessionMode,
       mode: "offline",
       model: config.model,
       startedAt,
@@ -202,7 +224,7 @@ export async function runCodingAgent({
       protocolRepairCount: 0,
       protocolErrors: [],
       toolCallCount: 0,
-      answer: buildOfflineAnswer(snapshot.fileCount, contextSelection.selectedCount, toolPolicy)
+      answer: buildOfflineAnswer(snapshot.fileCount, contextSelection.selectedCount, toolPolicy, sessionMode)
     };
 
     onEvent?.({ type: "run_completed", result });
@@ -214,6 +236,7 @@ export async function runCodingAgent({
     snapshot,
     availableTools,
     toolPolicy,
+    sessionMode,
     MAX_TOOL_CALLS
   );
   let toolCallCount = 0;
@@ -256,6 +279,7 @@ export async function runCodingAgent({
       return completeRunResult({
         goal,
         resumeFromRunId,
+        sessionMode,
         model,
         startedAt,
         steps,
@@ -312,6 +336,7 @@ export async function runCodingAgent({
       return completeRunResult({
         goal,
         resumeFromRunId,
+        sessionMode,
         model,
         startedAt,
         steps,
@@ -330,6 +355,7 @@ export async function runCodingAgent({
       return completeRunResult({
         goal,
         resumeFromRunId,
+        sessionMode,
         model,
         startedAt,
         steps,
@@ -348,6 +374,7 @@ export async function runCodingAgent({
       return completeRunResult({
         goal,
         resumeFromRunId,
+        sessionMode,
         model,
         startedAt,
         steps,
@@ -397,6 +424,7 @@ export async function runCodingAgent({
   return completeRunResult({
     goal,
     resumeFromRunId,
+    sessionMode,
     model,
     startedAt,
     steps,
@@ -457,6 +485,7 @@ function completeRunResult(
 function buildRunResult({
   goal,
   resumeFromRunId,
+  sessionMode,
   model,
   startedAt,
   steps,
@@ -473,6 +502,7 @@ function buildRunResult({
 }: {
   goal: string;
   resumeFromRunId?: string;
+  sessionMode: AgentSessionMode;
   model: string;
   startedAt: string;
   steps: AgentStep[];
@@ -491,6 +521,7 @@ function buildRunResult({
     id: randomUUID(),
     goal,
     resumeFromRunId,
+    sessionMode,
     mode: "deepseek",
     model,
     startedAt,
@@ -555,13 +586,17 @@ function completeLatestStep(
 function buildOfflineAnswer(
   fileCount: number,
   selectedFileCount: number,
-  toolPolicy: ToolPolicySnapshot
+  toolPolicy: ToolPolicySnapshot,
+  sessionMode: AgentSessionMode
 ): AgentAnswer {
+  const modeLine = describeAgentSessionMode(sessionMode);
+
   return {
-    title: "补丁验证闭环已就绪",
+    title: "会话模式骨架已就绪",
     summary:
-      "当前运行在离线模式。V0.16 已经具备只读工具循环、结构化补丁提案、补丁 diff 审查、人工确认后的安全应用入口、应用后验证闭环、运行历史、终端 CLI/TUI、续接上下文、Agent Event Bus、DeepSeek token streaming、上下文预算、上下文选择、可配置工具策略和模型协议修复；配置 DEEPSEEK_API_KEY 后模型可以通过 CLI、TUI 或 Web 流式输出。",
+      `当前运行在离线模式，session mode 为 ${sessionMode}。V0.17 已经具备 plan/agent/apply 会话模式骨架、只读工具循环、结构化补丁提案、补丁 diff 审查、人工确认后的安全应用入口、应用后验证闭环、运行历史、终端 CLI/TUI、续接上下文、Agent Event Bus、DeepSeek token streaming、上下文预算、上下文选择、可配置工具策略和模型协议修复。`,
     plan: [
+      `本轮会话模式：${modeLine}。`,
       "把 Web UI 作为任务入口，收集用户的编码目标。",
       `服务端先索引当前工作区的 ${fileCount} 个文本文件，再选择 ${selectedFileCount} 个初始上下文候选。`,
       "模型通过严格 JSON 请求只读工具，服务端执行后把结果回填。",
@@ -569,6 +604,7 @@ function buildOfflineAnswer(
       "用户在 UI 中审查 patchProposal 后，点击确认才会写入文件。",
       "runner 会在写入前生成 patchPreview，展示增删行数、风险标签和紧凑 diff 片段。",
       "补丁应用后可以运行白名单验证，并把 manual/post_patch 触发来源写回 run history。",
+      "plan 模式会禁用 patchProposal；apply 模式会提示模型优先产出可审查补丁，但仍保持人工确认。",
       "也可以通过 npm run agent -- \"目标\" 在终端里运行同一套 agent 内核。",
       "终端可通过 --stream 查看高层步骤事件，通过 --apply 审批补丁，通过 --validate 运行白名单验证。",
       "CLI 和 Web 都可以选择历史 run，把上一轮摘要、计划、风险、补丁元信息和验证结果作为本轮上下文。",
@@ -594,10 +630,11 @@ function buildOfflineAnswer(
       "docs/MODEL_PROTOCOL.md",
       "docs/PATCH_DIFF.md",
       "docs/VALIDATION_LOOP.md",
+      "docs/SESSION_MODES.md",
       "src/app/api/agent/stream/route.ts"
     ],
     proposedChanges: [
-      "V0.17 可以继续做会话模式与 TUI 交互骨架，让 plan/agent/apply 更接近 DeepSeek-TUI。"
+      "V0.18 可以继续做会话模式下的 TUI 多轮输入和更清晰的任务队列视图。"
     ],
     risks: [
       "当前版本默认不会自动修改文件，所有 patchProposal 写入仍需要人工确认。",

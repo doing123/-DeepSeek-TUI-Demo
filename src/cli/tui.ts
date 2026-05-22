@@ -8,6 +8,11 @@ import { describeProtocolRepairPolicy } from "../lib/agent/model-protocol";
 import { applyPatchProposal } from "../lib/agent/patches";
 import { buildResumePromptGoal } from "../lib/agent/resume";
 import { runCodingAgent } from "../lib/agent/runner";
+import {
+  AGENT_SESSION_MODES,
+  describeAgentSessionMode,
+  normalizeAgentSessionMode
+} from "../lib/agent/session-mode";
 import { describeToolPolicy } from "../lib/agent/tool-policy";
 import {
   appendValidationToRun,
@@ -20,6 +25,7 @@ import type {
   AgentRunEvent,
   AgentRunResult,
   AgentRunSummary,
+  AgentSessionMode,
   ValidationRunResult
 } from "../lib/agent/types";
 
@@ -28,11 +34,13 @@ type TuiOptions = {
   goal: string;
   help: boolean;
   once: boolean;
+  sessionMode: AgentSessionMode;
 };
 
 type TuiState = {
   workspaceRoot: string;
   goal: string;
+  sessionMode: AgentSessionMode;
   recentRuns: AgentRunSummary[];
   selectedIndex: number;
   resumeRunId?: string;
@@ -65,13 +73,14 @@ async function main() {
   await loadLocalEnv(workspaceRoot);
 
   if (options.once || !process.stdout.isTTY || !process.stdin.isTTY) {
-    await runOnce(workspaceRoot, options.goal);
+    await runOnce(workspaceRoot, options.goal, options.sessionMode);
     return;
   }
 
   const state: TuiState = {
     workspaceRoot,
     goal: options.goal,
+    sessionMode: options.sessionMode,
     recentRuns: await listAgentRunSummaries(workspaceRoot),
     selectedIndex: 0,
     isRunning: false,
@@ -89,7 +98,8 @@ function parseArgs(args: string[]): TuiOptions {
     cwd: process.cwd(),
     goal: DEFAULT_GOAL,
     help: false,
-    once: false
+    once: false,
+    sessionMode: "agent"
   };
   const goalParts: string[] = [];
 
@@ -108,6 +118,12 @@ function parseArgs(args: string[]): TuiOptions {
 
     if (arg === "--cwd") {
       options.cwd = readRequiredArg(args[index + 1], "--cwd");
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--mode") {
+      options.sessionMode = normalizeAgentSessionMode(readRequiredArg(args[index + 1], "--mode"));
       index += 1;
       continue;
     }
@@ -173,6 +189,13 @@ async function runInteractiveTui(state: TuiState) {
       return;
     }
 
+    if (key.name === "m") {
+      state.sessionMode = nextSessionMode(state.sessionMode);
+      state.status = `Mode: ${describeAgentSessionMode(state.sessionMode)}`;
+      render(state);
+      return;
+    }
+
     if (key.name === "a") {
       await applyLatestPatch(state);
       render(state);
@@ -201,9 +224,10 @@ async function runInteractiveTui(state: TuiState) {
   });
 }
 
-async function runOnce(workspaceRoot: string, goal: string) {
+async function runOnce(workspaceRoot: string, goal: string, sessionMode: AgentSessionMode) {
   const result = await runCodingAgent({
     goal,
+    sessionMode,
     streamModel: true,
     workspaceRoot,
     onEvent: (event) => {
@@ -239,6 +263,7 @@ async function runTuiAgent(state: TuiState) {
       goal: state.goal,
       promptGoal,
       resumeFromRunId: resumeRecord?.id,
+      sessionMode: state.sessionMode,
       streamModel: true,
       workspaceRoot: state.workspaceRoot,
       onEvent: (event) => {
@@ -293,7 +318,8 @@ function render(state: TuiState) {
   lines.push(`Workspace: ${truncate(state.workspaceRoot, width - 11)}`);
   lines.push("");
   lines.push(row("Goal", state.goal, leftWidth, "Live Events", state.status, rightWidth));
-  lines.push(row("Keys", "r run · n edit · ↑↓ select · c continue · a apply · v validate · q quit", leftWidth, "", "", rightWidth));
+  lines.push(row("Keys", "r run · m mode · n edit · ↑↓ select · c continue · a apply · v validate · q quit", leftWidth, "", "", rightWidth));
+  lines.push(row("Mode", describeAgentSessionMode(state.sessionMode), leftWidth, "", "", rightWidth));
   lines.push(row("Resume", state.resumeRunId ?? "none", leftWidth, "", "", rightWidth));
   lines.push(row("Tool Calls", formatToolSummary(state), leftWidth, "Policy", formatPolicySummary(state.result), rightWidth));
   lines.push(row("Context", formatContextSummary(state.result), leftWidth, "", "", rightWidth));
@@ -327,6 +353,7 @@ function render(state: TuiState) {
     lines.push("");
     lines.push(color("Result", "green"));
     lines.push(...wrap(`${state.result.answer.title}: ${state.result.answer.summary}`, width).slice(0, 4));
+    lines.push(color(`Session: ${state.result.sessionMode ?? "agent"}`, "dim"));
 
     if (state.result.answer.patchProposal) {
       lines.push(color(`Patch: ${state.result.answer.patchProposal.summary}`, "cyan"));
@@ -387,6 +414,11 @@ function continueSelectedRun(state: TuiState) {
   state.resumeRunId = selected.id;
   state.goal = `继续上一轮任务：${selected.goal}\n\n本轮目标：`;
   state.status = `Continuing ${selected.id}`;
+}
+
+function nextSessionMode(current: AgentSessionMode) {
+  const index = AGENT_SESSION_MODES.indexOf(current);
+  return AGENT_SESSION_MODES[(index + 1) % AGENT_SESSION_MODES.length] ?? "agent";
 }
 
 async function editGoal(
@@ -486,7 +518,7 @@ async function loadEnvFile(filePath: string) {
 
 function formatEvent(event: AgentRunEvent) {
   if (event.type === "run_started") {
-    return `run_started ${event.goal}`;
+    return `run_started ${event.sessionMode} ${event.goal}`;
   }
 
   if (event.type === "step_started") {
@@ -633,14 +665,17 @@ function printHelp() {
 Usage:
   npm run tui
   npm run tui -- "inspect current repo"
+  npm run tui -- --mode plan "plan next change"
   npm run tui -- --once "non-interactive smoke test"
 
 Keys:
   r / enter  Run current goal
+  m          Cycle session mode: plan / agent / apply
   n          Edit goal
   up/down    Select recent run
   c          Continue selected run
   a          Apply latest patch proposal
+  v          Validate latest run with typecheck
   q / esc    Quit
 `);
 }

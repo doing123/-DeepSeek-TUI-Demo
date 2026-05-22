@@ -6,7 +6,25 @@ All notable project changes are tracked here.
 
 ### Notes
 
-- Next planned focus: TUI session modes and a closer DeepSeek-TUI interaction loop.
+- Next planned focus: richer multi-turn TUI session input and run filtering.
+
+## 0.17.0 - 2026-05-22
+
+### Added
+
+- Added `plan`, `agent`, and `apply` session modes across runner, prompt, run results, and run history.
+- Added Web session-mode controls above the task composer.
+- Added CLI `--mode plan|agent|apply`; `--apply` now defaults the session to `apply` when no mode is provided.
+- Added TUI `m` key to cycle session modes before running a goal.
+- Added `docs/SESSION_MODES.md` for the mode model and safety boundary.
+
+### Changed
+
+- Plan mode disables `patchProposal` locally for the run.
+- Apply mode prompts the model to prefer a reviewable `patchProposal` when context is sufficient.
+- Event streams and recent-run summaries now include `sessionMode`.
+- Updated handoff context, project planning, and generated architecture snapshots for V0.17.
+- Bumped project version to `0.17.0`.
 
 ## 0.16.0 - 2026-05-22
 

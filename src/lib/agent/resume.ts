@@ -32,6 +32,7 @@ export function buildResumePromptGoal(nextGoal: string, record: AgentRunRecord) 
     `runId: ${record.id}`,
     `title: ${previous.answer.title}`,
     `previousGoal: ${previous.goal}`,
+    `sessionMode: ${previous.sessionMode ?? "agent"}`,
     `mode/model: ${previous.mode}/${previous.model}`,
     `summary: ${previous.answer.summary}`,
     "",

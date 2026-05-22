@@ -1,5 +1,6 @@
 import { buildResumePromptGoal } from "@/lib/agent/resume";
 import { runCodingAgent } from "@/lib/agent/runner";
+import { normalizeAgentSessionMode } from "@/lib/agent/session-mode";
 import {
   readAgentRunRecord,
   saveAgentRunRecord
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
   }
 
   const resumeRunId = readOptionalString(payload, "resumeRunId");
+  const sessionMode = normalizeAgentSessionMode(readOptionalString(payload, "sessionMode"));
   const resumeRecord = resumeRunId
     ? await readAgentRunRecord(process.cwd(), resumeRunId)
     : null;
@@ -51,6 +53,7 @@ export async function POST(request: Request) {
         encoder,
         goal,
         promptGoal,
+        sessionMode,
         resumeFromRunId: resumeRecord?.id
       });
     }
@@ -70,12 +73,14 @@ async function runAndStreamEvents({
   encoder,
   goal,
   promptGoal,
+  sessionMode,
   resumeFromRunId
 }: {
   controller: ReadableStreamDefaultController<Uint8Array>;
   encoder: TextEncoder;
   goal: string;
   promptGoal: string;
+  sessionMode: ReturnType<typeof normalizeAgentSessionMode>;
   resumeFromRunId?: string;
 }) {
   try {
@@ -83,6 +88,7 @@ async function runAndStreamEvents({
       goal,
       promptGoal,
       resumeFromRunId,
+      sessionMode,
       streamModel: true,
       workspaceRoot: process.cwd(),
       onEvent: (event) => sendSseEvent(controller, encoder, "agent_event", event)

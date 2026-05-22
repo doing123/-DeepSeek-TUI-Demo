@@ -1,5 +1,7 @@
 export type AgentMode = "deepseek" | "offline";
 
+export type AgentSessionMode = "plan" | "agent" | "apply";
+
 export type ReadOnlyToolName = "list_files" | "read_file" | "search_text" | "git_status";
 
 export type AgentMessage = {
@@ -23,6 +25,7 @@ export type AgentRunEvent =
   | {
       type: "run_started";
       goal: string;
+      sessionMode: AgentSessionMode;
       startedAt: string;
       resumeFromRunId?: string;
     }
@@ -245,6 +248,7 @@ export type AgentRunResult = {
   id: string;
   goal: string;
   resumeFromRunId?: string;
+  sessionMode: AgentSessionMode;
   mode: AgentMode;
   model: string;
   startedAt: string;
@@ -281,6 +285,7 @@ export type AgentRunSummary = {
   id: string;
   goal: string;
   resumeFromRunId?: string;
+  sessionMode: AgentSessionMode;
   title: string;
   mode: AgentMode;
   model: string;

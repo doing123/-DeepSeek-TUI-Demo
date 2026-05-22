@@ -95,6 +95,35 @@ button {
   color: var(--muted);
 }
 
+.mode-control {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.mode-control__item {
+  min-height: 34px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.mode-control__item--active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.mode-control__item:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .composer textarea {
   width: 100%;
   min-height: 190px;

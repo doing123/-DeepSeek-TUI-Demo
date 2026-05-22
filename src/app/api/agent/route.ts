@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildResumePromptGoal } from "@/lib/agent/resume";
 import { runCodingAgent } from "@/lib/agent/runner";
+import { normalizeAgentSessionMode } from "@/lib/agent/session-mode";
 import {
   readAgentRunRecord,
   saveAgentRunRecord
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
 
   try {
     const resumeRunId = readOptionalString(payload, "resumeRunId");
+    const sessionMode = normalizeAgentSessionMode(readOptionalString(payload, "sessionMode"));
     const resumeRecord = resumeRunId
       ? await readAgentRunRecord(process.cwd(), resumeRunId)
       : null;
@@ -46,6 +48,7 @@ export async function POST(request: Request) {
       goal,
       promptGoal,
       resumeFromRunId: resumeRecord?.id,
+      sessionMode,
       workspaceRoot: process.cwd()
     });
 

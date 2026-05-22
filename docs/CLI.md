@@ -25,6 +25,11 @@ V0.16 tightens validation into a post-patch loop. If `--apply` and `--validate`
 are used together, validation runs only after the patch was successfully applied
 and is stored with `trigger=post_patch`.
 
+V0.17 adds session modes. Use `--mode plan` for read-only planning, `--mode
+agent` for the default inspect-and-propose loop, and `--mode apply` for an
+implementation-oriented run that asks the model to prefer a reviewable
+`patchProposal` when enough context is available.
+
 ## Usage
 
 ```bash
@@ -47,6 +52,12 @@ Ask before applying a returned patch proposal:
 
 ```bash
 npm run agent -- --apply "实现一个小改动"
+```
+
+Run in planning mode without patch proposals:
+
+```bash
+npm run agent -- --mode plan "规划下一版 TUI 交互"
 ```
 
 Run whitelisted validation commands after the agent run, or after a successful
@@ -95,6 +106,9 @@ npm run agent -- --json "查看当前仓库有哪些风险"
   explicit user approval. The approval prompt includes diff totals when the
   runner produced a preview, and the CLI reuses the same path and action
   validation as the browser patch API.
+- `--mode plan` disables patch proposals for the run. `--mode apply` keeps the
+  same human-approval boundary but tells the model to prefer a concrete
+  `patchProposal` when the task and context are clear.
 - Validation commands are still whitelist-only: `typecheck`, `build`, or `all`.
   With `--apply`, they are skipped if the patch is not applied.
 - Git context is exposed through the fixed read-only `git_status` tool.

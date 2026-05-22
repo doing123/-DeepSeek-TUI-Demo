@@ -18,6 +18,9 @@ V0.16 adds `v` for a lightweight validation loop. After applying a patch with
 `a`, pressing `v` runs `typecheck`, stores it against the latest run, and marks
 the result as `post_patch`.
 
+V0.17 adds session modes to the terminal loop. Press `m` to cycle
+`plan -> agent -> apply` before running the current goal.
+
 ```bash
 npm run tui
 npm run tui -- "查看当前仓库状态"
@@ -26,6 +29,7 @@ npm run tui -- "查看当前仓库状态"
 ## Keys
 
 - `r` / `enter`: run the current goal
+- `m`: cycle session mode
 - `n`: edit the goal
 - `up` / `down`: select a saved run
 - `c`: continue from the selected saved run
@@ -84,3 +88,9 @@ same safe patch application module and human approval boundary.
 The TUI keeps validation intentionally small: `v` runs the fixed `typecheck`
 command and appends the result to `.agent-runs`. If a patch was just applied for
 the latest result, the validation trigger is saved as `post_patch`.
+
+## Session Modes
+
+The TUI stores the selected session mode on each run. `plan` disables
+`patchProposal`, `agent` is the default inspection loop, and `apply` nudges the
+model toward a reviewable patch while preserving human approval.

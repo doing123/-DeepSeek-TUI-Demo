@@ -62,9 +62,9 @@ Observed ideas to learn from:
 
 ## Current State
 
-Version: V0.16
+Version: V0.17
 
-The current implementation is a Node.js 22 + Next.js 16 learning workbench plus a CLI and a dependency-free TUI spike. It has read-only tools, explicit context budgets, heuristic context selection, configurable tool policy, model protocol repair, server-side patch diff preview, human-approved patch application, post-patch validation, local run history, Agent Event Bus, DeepSeek token streaming, terminal approval flow, and simple resume.
+The current implementation is a Node.js 22 + Next.js 16 learning workbench plus a CLI and a dependency-free TUI spike. It has read-only tools, explicit session modes, explicit context budgets, heuristic context selection, configurable tool policy, model protocol repair, server-side patch diff preview, human-approved patch application, post-patch validation, local run history, Agent Event Bus, DeepSeek token streaming, terminal approval flow, and simple resume.
 
 Implemented:
 
@@ -95,6 +95,12 @@ Implemented:
 - CLI `--apply --validate` runs validation only after the patch was successfully applied.
 - TUI `v` runs `typecheck` for the latest run and stores it with `post_patch` when a patch was just applied.
 - Resume prompts include validation trigger, exit code, duration, and compact failure output.
+- `AgentSessionMode` defines `plan`, `agent`, and `apply` run modes.
+- `src/lib/agent/session-mode.ts` centralizes session-mode parsing, descriptions, prompt text, and plan-mode patch disabling.
+- Prompt construction includes the active session mode.
+- Run results, run summaries, event streams, CLI, Web, and TUI expose the active session mode.
+- CLI supports `--mode plan|agent|apply`; `--apply` defaults to `apply` when no explicit mode is passed.
+- TUI supports `m` to cycle plan/agent/apply before running a goal.
 - Read-only `list_files`, `read_file`, `search_text`, and `git_status` tools.
 - Tool definitions include `category`, `risk`, and `approvalRequired` so callable boundaries are visible to prompt, code, and docs.
 - `src/lib/agent/tool-policy.ts` turns environment variables into a run-level tool policy snapshot.
@@ -178,6 +184,7 @@ Important files:
 - `docs/TOOL_POLICY.md`
 - `docs/PATCH_DIFF.md`
 - `docs/VALIDATION_LOOP.md`
+- `docs/SESSION_MODES.md`
 
 ## Architecture Direction
 
@@ -196,15 +203,15 @@ UI / CLI
   -> Generated docs + architecture snapshot
 ```
 
-The V0.16 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 validation, V0.5 run history, V0.6 terminal shell, V0.7 CLI streaming/approval, V0.8 cross-surface continuation, V0.9 shared event stream, V0.10 full-screen terminal renderer, V0.11 context budgets/tool boundaries, V0.12 local tool policy, V0.13 context selection, V0.14 model protocol repair, V0.15 patch diff review, and adds a visible post-patch validation loop:
+The V0.17 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 validation, V0.5 run history, V0.6 terminal shell, V0.7 CLI streaming/approval, V0.8 cross-surface continuation, V0.9 shared event stream, V0.10 full-screen terminal renderer, V0.11 context budgets/tool boundaries, V0.12 local tool policy, V0.13 context selection, V0.14 model protocol repair, V0.15 patch diff review, V0.16 post-patch validation, and adds explicit plan/agent/apply session modes:
 
 1. User submits a goal.
-2. Agent creates a turn state.
+2. Agent creates a turn state with `sessionMode=plan|agent|apply`.
 3. Model chooses a tool call such as `list_files`, `read_file`, `search_text`, or `git_status`.
 4. Server validates the tool call against the active local tool policy.
 5. Tool output is appended to the transcript.
 6. Model either requests another tool or returns a final answer.
-7. Final answers may include a `patchProposal` with structured file changes.
+7. Final answers may include a `patchProposal` with structured file changes when session/tool policy allows it.
 8. Runner validates the proposal through the safe patch module and builds a compact diff preview.
 9. UI, CLI, and TUI show diff counts and write-risk metadata before any write.
 10. UI shows patch preview and requires explicit user confirmation.
@@ -234,7 +241,7 @@ The V0.16 architecture keeps the V0.2 tool loop, V0.3 write approval, V0.4 valid
 34. Runner builds a tool policy snapshot from `AGENT_ALLOWED_READ_TOOLS` and `AGENT_PATCH_PROPOSAL`.
 35. Prompt construction exposes only policy-allowed tools.
 36. Runner enforces the same policy before executing tool calls.
-37. CLI, Web, and TUI show context selection, protocol repair, patch diff, validation trigger, and policy metadata so users can understand why a run had a smaller prompt/tool surface, needed repair, proposed risky writes, or failed verification.
+37. CLI, Web, and TUI show context selection, protocol repair, patch diff, validation trigger, session mode, and policy metadata so users can understand why a run had a smaller prompt/tool surface, stayed read-only, needed repair, proposed risky writes, or failed verification.
 
 Debugging uses the official Next.js 16 `next dev --inspect` path. Start `npm run dev:inspect:break`, attach VS Code with `Attach Next.js Server (9229)`, and run `npm run debug:check` to verify that the guarded `debugger` statement in `src/app/api/agent/route.ts` is reachable before testing normal source breakpoints.
 
@@ -532,6 +539,28 @@ Do not build yet:
 - generalized command sandbox
 - rich multi-mode TUI session manager
 
+## V0.17 Completed
+
+Theme: session modes and a closer DeepSeek-TUI interaction loop.
+
+Built:
+
+- `AgentSessionMode` with `plan`, `agent`, and `apply`.
+- `src/lib/agent/session-mode.ts` for mode parsing, descriptions, prompt guidance, and plan-mode policy override.
+- `sessionMode` on run results, saved run records, recent-run summaries, and run-started events.
+- Prompt-level mode instructions so plan stays read-only and apply prefers reviewable patches.
+- Web mode control above the task composer.
+- CLI `--mode plan|agent|apply`, with `--apply` defaulting to apply mode.
+- TUI `m` key to cycle modes before running a goal.
+- `docs/SESSION_MODES.md` as the session-mode handoff note.
+
+Do not build yet:
+
+- background task queues
+- arbitrary model-suggested shell commands
+- automatic patch application without human approval
+- multi-agent/sub-agent routing
+
 ## Safety Rules
 
 - macOS only for now.
@@ -548,7 +577,7 @@ Use this prompt when starting the next version:
 ```txt
 You are continuing DeepSeek TUI Demo.
 
-Goal: implement V0.17, session modes and a closer DeepSeek-TUI interaction loop for a macOS-first coding-agent learning project built with Next.js and TypeScript.
+Goal: implement V0.18, richer multi-turn TUI session input and run filtering for a macOS-first coding-agent learning project built with Next.js and TypeScript.
 
 Read first:
 - docs/DEVELOPMENT_CONTEXT.md
@@ -575,6 +604,7 @@ Read first:
 - docs/TOOL_POLICY.md
 - docs/PATCH_DIFF.md
 - docs/VALIDATION_LOOP.md
+- docs/SESSION_MODES.md
 
 Constraints:
 - Keep DeepSeek as the first provider.
@@ -589,13 +619,13 @@ Constraints:
 - Keep the V0.14 protocol repair controls working.
 - Keep the V0.15 patch diff preview controls working.
 - Keep the V0.16 post-patch validation controls working.
+- Keep the V0.17 plan/agent/apply session modes working.
 - Keep human approval before writes.
 - Never execute model-suggested arbitrary commands.
 - Reuse the existing runner, run store, resume, patch, and validation modules.
-- Add explicit session modes such as plan, agent, and apply at the CLI/TUI control level.
-- Keep plan mode read-only and patchProposal optional.
-- Keep apply mode behind human approval and existing patch diff review.
-- Make TUI recent-run selection, continuation, patch apply, and validation feel like one coherent coding-agent loop.
+- Improve the TUI loop around multi-turn use: mode-aware recent-run display, simple mode filtering, and clearer continuation state.
+- Keep the implementation dependency-free unless the value of a TUI framework becomes obvious.
+- Preserve sessionMode in any new run filtering or continuation affordance.
 - Keep patch application behind explicit human approval.
 - Keep validation commands whitelist-only.
 - Do not store API keys or full hidden reasoning.

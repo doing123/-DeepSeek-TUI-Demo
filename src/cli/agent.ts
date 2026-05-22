@@ -6,12 +6,14 @@ import { describeContextBudget } from "../lib/agent/context-budget";
 import { describeContextSelection } from "../lib/agent/context-selection";
 import { describeProtocolRepairPolicy } from "../lib/agent/model-protocol";
 import { buildResumePromptGoal, formatResumeTitle } from "../lib/agent/resume";
+import { describeAgentSessionMode, isAgentSessionMode } from "../lib/agent/session-mode";
 import { describeToolPolicy } from "../lib/agent/tool-policy";
 import type {
   AgentRunEvent,
   AgentRunRecord,
   AgentRunResult,
   AgentRunSummary,
+  AgentSessionMode,
   PatchApplyResult,
   PatchDiffPreview,
   StoredAgentRunResult,
@@ -27,6 +29,7 @@ type CliOptions = {
   noSave: boolean;
   recent: boolean;
   recentLimit: number;
+  sessionMode?: AgentSessionMode;
   continueRunId?: string;
   showRunId?: string;
   stream: boolean;
@@ -91,12 +94,14 @@ async function main() {
   const promptGoal = resumeRecord
     ? buildResumePromptGoal(options.goal, resumeRecord)
     : options.goal;
+  const sessionMode = options.sessionMode ?? (options.apply ? "apply" : "agent");
 
-  printHeader(options.goal, workspaceRoot, options, resumeRecord ?? undefined);
+  printHeader(options.goal, workspaceRoot, options, sessionMode, resumeRecord ?? undefined);
   const result = await runCodingAgent({
     goal: options.goal,
     promptGoal,
     resumeFromRunId: resumeRecord?.id,
+    sessionMode,
     streamModel: options.stream,
     workspaceRoot,
     onEvent: options.stream && !options.json ? printRunEvent : undefined
@@ -140,6 +145,7 @@ async function parseArgs(args: string[]): Promise<CliOptions> {
     noSave: false,
     recent: false,
     recentLimit: 10,
+    sessionMode: undefined,
     stream: false,
     trace: false,
     validate: [],
@@ -188,6 +194,12 @@ async function parseArgs(args: string[]): Promise<CliOptions> {
 
     if (arg === "--validate") {
       options.validate = readValidationTargets(args[index + 1]);
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--mode") {
+      options.sessionMode = readSessionMode(args[index + 1]);
       index += 1;
       continue;
     }
@@ -262,7 +274,7 @@ async function loadEnvFile(filePath: string) {
 
 function printRunEvent(event: AgentRunEvent) {
   if (event.type === "run_started") {
-    console.log(`== run started: ${event.startedAt}`);
+    console.log(`== run started: ${event.startedAt} mode=${event.sessionMode}`);
     return;
   }
 
@@ -401,6 +413,7 @@ function printHeader(
   goal: string,
   workspaceRoot: string,
   options: CliOptions,
+  sessionMode: AgentSessionMode,
   resumeRecord?: AgentRunRecord
 ) {
   if (options.json) {
@@ -410,6 +423,7 @@ function printHeader(
   console.log("DeepSeek TUI Demo CLI");
   console.log(`Workspace: ${workspaceRoot}`);
   console.log(`Goal: ${goal}`);
+  console.log(`Session mode: ${describeAgentSessionMode(sessionMode)}`);
   if (resumeRecord) {
     console.log(`Continue: ${formatResumeTitle(resumeRecord)}`);
   }
@@ -476,6 +490,7 @@ function printAgentResult(result: AgentRunResult | StoredAgentRunResult, options
     console.log(`Continued from: ${result.resumeFromRunId}`);
   }
   console.log(`Mode: ${result.mode}`);
+  console.log(`Session mode: ${result.sessionMode ?? "agent"}`);
   console.log(`Model: ${result.model}`);
   console.log(`Workspace files indexed: ${result.workspace.fileCount}`);
   if (result.contextBudget) {
@@ -582,6 +597,7 @@ function printRecentRuns(summaries: AgentRunSummary[], options: CliOptions) {
     console.log(
       `  ${item.mode} / ${item.model} / tools=${item.toolCallCount} / patches=${item.patchFileCount}`
     );
+    console.log(`  session=${item.sessionMode ?? "agent"}`);
     if (item.resumeFromRunId) {
       console.log(`  continued-from=${item.resumeFromRunId}`);
     }
@@ -672,6 +688,7 @@ Options:
   --no-save        Do not persist this run to .agent-runs.
   --stream         Print step updates while the agent is running.
   --trace          Print detailed agent trace entries.
+  --mode <x>       Session mode: plan, agent, or apply. Defaults to agent, or apply with --apply.
   --apply          Ask before applying a returned patch proposal.
   -y, --yes        Confirm --apply without an interactive prompt.
   --validate <x>   Run typecheck, build, or all. With --apply, run after a successful patch apply.
@@ -734,6 +751,16 @@ function readValidationTargets(value: string | undefined): ValidationCommandName
   }
 
   return [...uniqueTargets];
+}
+
+function readSessionMode(value: string | undefined): AgentSessionMode {
+  const mode = readRequiredArg(value, "--mode");
+
+  if (!isAgentSessionMode(mode)) {
+    throw new Error("--mode must be plan, agent, or apply.");
+  }
+
+  return mode;
 }
 
 function trimForCli(value: string) {

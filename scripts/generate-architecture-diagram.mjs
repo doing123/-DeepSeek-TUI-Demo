@@ -51,7 +51,7 @@ function buildSvg({ title, version, environment, features, roadmap }) {
     {
       id: "runner",
       label: "Agent Runner",
-      detail: "context selection / repair / patch diff / validation",
+      detail: "session mode / context / repair / validation",
       x: 790,
       y: 170,
       w: 300,
@@ -229,6 +229,10 @@ function nextRoadmapText(roadmap, version) {
 function pickFeatureHighlights(features) {
   const keywords = [
     "应用后验证",
+    "会话模式",
+    "Plan 模式",
+    "Apply 模式",
+    "TUI 模式切换",
     "CLI 验证闭环",
     "TUI 验证入口",
     "验证触发来源",

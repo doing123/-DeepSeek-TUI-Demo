@@ -6,6 +6,7 @@ import type {
   AgentRunRecord,
   AgentRunResult,
   AgentRunSummary,
+  AgentSessionMode,
   ContextSelection,
   PatchApplyResult,
   PatchDiffPreview,
@@ -16,6 +17,7 @@ import type {
   ValidationTrigger,
   ValidationRunResult
 } from "@/lib/agent/types";
+import { describeAgentSessionMode } from "@/lib/agent/session-mode";
 
 const starterGoals = [
   "阅读当前仓库，告诉我下一步最小可实现的 coding-agent 功能。",
@@ -30,6 +32,7 @@ const defaultGoal =
 // displays the trace/result shape that a future TUI can reuse.
 export function AgentWorkbench() {
   const [goal, setGoal] = useState(defaultGoal);
+  const [sessionMode, setSessionMode] = useState<AgentSessionMode>("agent");
   const [result, setResult] = useState<AgentRunResult | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<AgentRunRecord | null>(null);
   const [resumeRun, setResumeRun] = useState<AgentRunSummary | null>(null);
@@ -109,6 +112,7 @@ export function AgentWorkbench() {
         },
         body: JSON.stringify({
           goal,
+          sessionMode,
           ...(resumeRun ? { resumeRunId: resumeRun.id } : {})
         })
       });
@@ -151,6 +155,11 @@ export function AgentWorkbench() {
 
         <form className="composer" onSubmit={runAgent}>
           <label htmlFor="goal">任务目标</label>
+          <SessionModeControl
+            value={sessionMode}
+            onChange={setSessionMode}
+            disabled={isRunning}
+          />
           <textarea
             id="goal"
             value={goal}
@@ -168,7 +177,7 @@ export function AgentWorkbench() {
 
           <div className="actions">
             <button className="primary" type="submit" disabled={!canRun}>
-              {isRunning ? "运行中" : "运行 Agent"}
+              {isRunning ? "运行中" : `运行 ${sessionMode}`}
             </button>
             <button
               className="secondary"
@@ -176,6 +185,7 @@ export function AgentWorkbench() {
               onClick={() => {
                 setGoal(defaultGoal);
                 setResumeRun(null);
+                setSessionMode("agent");
               }}
             >
               重置
@@ -231,6 +241,35 @@ export function AgentWorkbench() {
         )}
       </section>
     </main>
+  );
+}
+
+function SessionModeControl({
+  value,
+  onChange,
+  disabled
+}: {
+  value: AgentSessionMode;
+  onChange: (mode: AgentSessionMode) => void;
+  disabled: boolean;
+}) {
+  const modes: AgentSessionMode[] = ["plan", "agent", "apply"];
+
+  return (
+    <div className="mode-control" aria-label="会话模式">
+      {modes.map((mode) => (
+        <button
+          className={value === mode ? "mode-control__item mode-control__item--active" : "mode-control__item"}
+          type="button"
+          key={mode}
+          disabled={disabled}
+          onClick={() => onChange(mode)}
+          title={describeAgentSessionMode(mode)}
+        >
+          {mode}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -296,8 +335,8 @@ function formatLiveEventTitle(event: AgentRunEvent) {
 function formatLiveEventDetail(event: AgentRunEvent) {
   if (event.type === "run_started") {
     return event.resumeFromRunId
-      ? `续接 ${event.resumeFromRunId}`
-      : event.goal;
+      ? `${event.sessionMode} · 续接 ${event.resumeFromRunId}`
+      : `${event.sessionMode} · ${event.goal}`;
   }
 
   if (event.type === "step_started" || event.type === "step_completed") {
@@ -349,7 +388,7 @@ function RecentRunsPanel({
                 <strong>{run.title}</strong>
                 <span>{run.goal}</span>
                 <small>
-                  {run.mode} · {run.toolCallCount} tools · {run.validationCount} checks
+                  {run.sessionMode ?? "agent"} · {run.mode} · {run.toolCallCount} tools · {run.validationCount} checks
                 </small>
               </button>
               <button
@@ -384,6 +423,7 @@ function AgentResultView({
             <span className={result.mode === "deepseek" ? "tag tag--ok" : "tag tag--warn"}>
               {result.mode}
             </span>
+            <span className="tag tag--neutral">{result.sessionMode ?? "agent"}</span>
             <span className="tag tag--neutral">{result.model}</span>
             {result.resumeFromRunId ? (
               <span className="tag tag--neutral">continued</span>
